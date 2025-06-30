@@ -1,0 +1,28 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "ra_compiler"
+version = "0.1.0"
+description = "Relational Algebra Compiler"
+readme = "README"
+requires-python = ">=3.8"
+authors = [
+  { name = "Sydney Lynch" }
+]
+keywords = ["relational algebra", "compiler", "SQL", "database"]
+
+dependencies = [
+  "lark-parser>=0.11.0",
+  "mysql-connector-python>=8.0.25"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/sydlyn/RACompiler"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[project.scripts]
+rac = "ra_compiler.cli:main"

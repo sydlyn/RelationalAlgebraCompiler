@@ -1,0 +1,161 @@
+// ra_compiler/grammar.lark
+// defines the grammar for the relational algebra compiler as described in [doc file] <- TODO
+
+start: "(" expr ")"
+
+?expr: _unary_ops
+     | _set_ops
+     | _join_ops
+     | "(" expr ")"
+
+
+// ~~~~~~~~ UNARY OPERATIONS ~~~~~~~~ //
+
+_unary_ops: projection
+         | selection
+         | group
+         | rename
+         | remove_duplicates
+         | sort
+
+projection: PROJ_PREFIX "{" attributes "}" table
+?selection: _SEL_PREFIX "{" comp_cond "}" table
+group: _GROUP_PREFIX "{" attributes ";" aggr_cond "}" table
+rename: _RENAME_PREFIX "(" CNAME "," table ")"
+remove_duplicates: _REMOVE_DUPLICATES_PREFIX table
+sort: _SORT_PREFIX "{" sort_attributes"}" table  
+
+PROJ_PREFIX: "/projection^d_"
+           | "/projection_"
+           | "/pi_"
+           | "/pi^d_"
+
+_SEL_PREFIX: "/selection_"
+           | "/sigma_"
+
+_GROUP_PREFIX: "/group_by_"
+             | "/group_"
+             | "/gamma_"
+
+_RENAME_PREFIX: "/rename"
+             | "/rho"
+
+_REMOVE_DUPLICATES_PREFIX: "/remove_duplicates"
+                        | "/remove_dups"
+                        | "/delta"
+
+_SORT_PREFIX: "/sort_"
+           | "/order_"
+           | "/tau_"
+
+
+// ~~~~~~~~ SET OPERATIONS ~~~~~~~~ //
+
+_set_ops: union
+       | intersection
+       | difference
+
+union: table UNION_PREFIX table // ("," table)*
+intersection: table INTERSECT_PREFIX table // ("," table)*
+difference: table DIFFERENCE_PREFIX table // ("," table)*
+
+UNION_PREFIX: "/union"
+            | "/u"
+            | "/union^d"
+            | "/u^d"
+
+INTERSECT_PREFIX: "/intersect"
+                   | "/inter"
+                   | "/intersect^d"
+                   | "/inter^d"
+
+DIFFERENCE_PREFIX: "/difference"
+                 | "/diff"
+                 | "/difference^d"
+                 | "/diff^d"
+
+
+// ~~~~~~~~ JOIN OPERATIONS ~~~~~~~~ //
+
+_join_ops: cross
+        | join
+        | outer_join
+        | semi_join
+        | divide
+
+cross: table _CROSS_PREFIX table
+join: table _JOIN_PREFIX ("{" (attributes | comp_cond) "}")? table
+divide: table _DIVIDE_PREFIX table
+outer_join: outer_join_left | outer_join_right | outer_join_full
+semi_join: semi_join_left | semi_join_right
+
+_CROSS_PREFIX: "/cross_product"
+            | "/cross"
+            | "/x"i
+
+_JOIN_PREFIX: /\/join(_)?/
+            | /\/inner_join(_)?/
+
+_DIVIDE_PREFIX: "/divide"
+              | "/div"
+
+outer_join_left: table _OUTER_JOIN_LEFT_PREFIX ("{" (attributes | comp_cond) "}")? table
+outer_join_right: table _OUTER_JOIN_RIGHT_PREFIX ("{" (attributes | comp_cond) "}")? table
+outer_join_full: table _OUTER_JOIN_FULL_PREFIX ("{" (attributes | comp_cond) "}")? table
+
+_OUTER_JOIN_LEFT_PREFIX: /\/left_outer_join(_)?/
+                      | /\/left_join(_)?/
+                      | /\/left_outer(_)?/
+                    //   | /\/left(_)?/
+
+_OUTER_JOIN_RIGHT_PREFIX: /\/right_outer_join(_)?/
+                       | /\/right_join(_)?/
+                       | /\/right_outer(_)?/
+                    //    | /\/right(_)?/
+
+_OUTER_JOIN_FULL_PREFIX: /\/full_outer_join(_)?/
+                      | /\/full_join(_)?/
+                      | /\/full_outer(_)?/
+                    //   | /\/full(_)?/
+
+semi_join_left: table _SEMI_JOIN_LEFT_PREFIX ("{" (attributes | comp_cond) "}")? table
+semi_join_right: table _SEMI_JOIN_RIGHT_PREFIX ("{" (attributes | comp_cond) "}")? table
+
+_SEMI_JOIN_LEFT_PREFIX: /\/left_semi(_join)?(_)?/
+                      | /\/left_semi(_)?/
+
+_SEMI_JOIN_RIGHT_PREFIX: /\/right_semi_join(_)?/
+                       | /\/right_semi(_)?/
+
+
+// ~~~~~~~~ TABLES AND ATTRIBUTES ~~~~~~~~ //
+
+table: CNAME | expr
+
+attributes: attr ("," attr)*
+sort_attributes: attr SORT_DIR ("," attr SORT_DIR)*
+?attr: CNAME 
+     | CNAME "." CNAME
+     | math_cond "->" CNAME
+
+math_cond: CNAME MATH_OP (CNAME | NUMBER)
+        | "(" math_cond ")"
+        
+comp_cond: attr COMP_OP (attr | NUMBER) 
+          | "(" comp_cond ")"
+          | comp_cond (and | or) comp_cond
+
+aggr_cond: AGGR_OP "(" attr ")" ("," aggr_cond)?
+
+MATH_OP: "+" | "-" | "*" | "/" | "%" | "^"
+COMP_OP: ">" | "<" | ">=" | "<=" | "!=" | "==" | "="
+AGGR_OP: "sum"i | "count"i | "avg"i | "min"i | "max"i
+and: "and"i | "&&" | "&"
+or: "or"i | "||" | "|"
+// eq: "==" | "="   // want to allow more options? TODO 
+SORT_DIR: "asc"i | "desc"i
+
+%import common.CNAME
+%import common.NUMBER
+%import common.WS
+%ignore WS
