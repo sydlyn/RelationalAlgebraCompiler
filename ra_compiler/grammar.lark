@@ -1,17 +1,17 @@
 // ra_compiler/grammar.lark
 // defines the grammar for the relational algebra compiler as described in [doc file] <- TODO
 
-start: "(" expr ")"
+start: "(" _expr ")"
 
-?expr: _unary_ops
-     | _set_ops
-     | _join_ops
-     | "(" expr ")"
+_expr: unary_ops
+     | set_ops
+     | join_ops
+     | "(" _expr ")"
 
 
 // ~~~~~~~~ UNARY OPERATIONS ~~~~~~~~ //
 
-_unary_ops: projection
+unary_ops: projection
          | selection
          | group
          | rename
@@ -19,23 +19,23 @@ _unary_ops: projection
          | sort
 
 projection: PROJ_PREFIX "{" attributes "}" table
-?selection: _SEL_PREFIX "{" comp_cond "}" table
+selection: _SEL_PREFIX "{" comp_cond "}" table
 group: _GROUP_PREFIX "{" attributes ";" aggr_cond "}" table
-rename: _RENAME_PREFIX "(" CNAME "," table ")"
+rename: _RENAME_PREFIX "{" CNAME "}" table
 remove_duplicates: _REMOVE_DUPLICATES_PREFIX table
 sort: _SORT_PREFIX "{" sort_attributes"}" table  
 
-PROJ_PREFIX: "/projection^d_"
-           | "/projection_"
-           | "/pi_"
-           | "/pi^d_"
+PROJ_PREFIX: "/projection"
+           | "/projection^d"
+           | "/pi"
+           | "/pi^d"
 
-_SEL_PREFIX: "/selection_"
-           | "/sigma_"
+_SEL_PREFIX: "/selection"
+           | "/sigma"
 
-_GROUP_PREFIX: "/group_by_"
-             | "/group_"
-             | "/gamma_"
+_GROUP_PREFIX: "/group_by"
+             | "/group"
+             | "/gamma"
 
 _RENAME_PREFIX: "/rename"
              | "/rho"
@@ -44,14 +44,14 @@ _REMOVE_DUPLICATES_PREFIX: "/remove_duplicates"
                         | "/remove_dups"
                         | "/delta"
 
-_SORT_PREFIX: "/sort_"
-           | "/order_"
-           | "/tau_"
+_SORT_PREFIX: "/sort"
+           | "/order"
+           | "/tau"
 
 
 // ~~~~~~~~ SET OPERATIONS ~~~~~~~~ //
 
-_set_ops: union
+set_ops: union
        | intersection
        | difference
 
@@ -77,65 +77,44 @@ DIFFERENCE_PREFIX: "/difference"
 
 // ~~~~~~~~ JOIN OPERATIONS ~~~~~~~~ //
 
-_join_ops: cross
+join_ops: cross
         | join
-        | outer_join
-        | semi_join
         | divide
 
 cross: table _CROSS_PREFIX table
-join: table _JOIN_PREFIX ("{" (attributes | comp_cond) "}")? table
+join: table JOIN_PREFIX ("{" (attributes | comp_cond) "}")? table
 divide: table _DIVIDE_PREFIX table
-outer_join: outer_join_left | outer_join_right | outer_join_full
-semi_join: semi_join_left | semi_join_right
 
 _CROSS_PREFIX: "/cross_product"
             | "/cross"
             | "/x"i
 
-_JOIN_PREFIX: /\/join(_)?/
-            | /\/inner_join(_)?/
+JOIN_PREFIX: /\/join/
+            | /\/inner_join/
+            | /\/left_outer_join/
+            | /\/left_join/
+            | /\/left_outer/
+            | /\/right_outer_join/
+            | /\/right_join/
+            | /\/right_outer/
+            | /\/full_outer_join/
+            | /\/full_join/
+            | /\/full_outer/
+            | /\/left_semi(_join)?/
+            | /\/left_semi/
+            | /\/right_semi_join/
+            | /\/right_semi/
 
 _DIVIDE_PREFIX: "/divide"
               | "/div"
 
-outer_join_left: table _OUTER_JOIN_LEFT_PREFIX ("{" (attributes | comp_cond) "}")? table
-outer_join_right: table _OUTER_JOIN_RIGHT_PREFIX ("{" (attributes | comp_cond) "}")? table
-outer_join_full: table _OUTER_JOIN_FULL_PREFIX ("{" (attributes | comp_cond) "}")? table
+// ~~~~~~~~ TABLES, ATTRIBUTES, & OTHER ~~~~~~~~ //
 
-_OUTER_JOIN_LEFT_PREFIX: /\/left_outer_join(_)?/
-                      | /\/left_join(_)?/
-                      | /\/left_outer(_)?/
-                    //   | /\/left(_)?/
-
-_OUTER_JOIN_RIGHT_PREFIX: /\/right_outer_join(_)?/
-                       | /\/right_join(_)?/
-                       | /\/right_outer(_)?/
-                    //    | /\/right(_)?/
-
-_OUTER_JOIN_FULL_PREFIX: /\/full_outer_join(_)?/
-                      | /\/full_join(_)?/
-                      | /\/full_outer(_)?/
-                    //   | /\/full(_)?/
-
-semi_join_left: table _SEMI_JOIN_LEFT_PREFIX ("{" (attributes | comp_cond) "}")? table
-semi_join_right: table _SEMI_JOIN_RIGHT_PREFIX ("{" (attributes | comp_cond) "}")? table
-
-_SEMI_JOIN_LEFT_PREFIX: /\/left_semi(_join)?(_)?/
-                      | /\/left_semi(_)?/
-
-_SEMI_JOIN_RIGHT_PREFIX: /\/right_semi_join(_)?/
-                       | /\/right_semi(_)?/
-
-
-// ~~~~~~~~ TABLES AND ATTRIBUTES ~~~~~~~~ //
-
-table: CNAME | expr
+table: CNAME | "(" _expr ")"
 
 attributes: attr ("," attr)*
 sort_attributes: attr SORT_DIR ("," attr SORT_DIR)*
-?attr: CNAME 
-     | CNAME "." CNAME
+?attr: CNAME ("." CNAME)*
      | math_cond "->" CNAME
 
 math_cond: CNAME MATH_OP (CNAME | NUMBER)
@@ -143,14 +122,14 @@ math_cond: CNAME MATH_OP (CNAME | NUMBER)
         
 comp_cond: attr COMP_OP (attr | NUMBER) 
           | "(" comp_cond ")"
-          | comp_cond (and | or) comp_cond
+          | comp_cond (AND | or) comp_cond
 
 aggr_cond: AGGR_OP "(" attr ")" ("," aggr_cond)?
 
 MATH_OP: "+" | "-" | "*" | "/" | "%" | "^"
 COMP_OP: ">" | "<" | ">=" | "<=" | "!=" | "==" | "="
 AGGR_OP: "sum"i | "count"i | "avg"i | "min"i | "max"i
-and: "and"i | "&&" | "&"
+AND: "and"i | "&&" | "&"
 or: "or"i | "||" | "|"
 // eq: "==" | "="   // want to allow more options? TODO 
 SORT_DIR: "asc"i | "desc"i
