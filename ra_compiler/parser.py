@@ -8,7 +8,7 @@ from .utils import clean_exit
 # path to lark grammar file
 GRAMMAR_FILE = 'grammar.lark'
 PROJ_DIR = os.path.dirname(__file__)
-GRAMMAR_PATH = os.path.join(os.path.dirname(__file__), GRAMMAR_FILE)
+GRAMMAR_PATH = os.path.join(PROJ_DIR, GRAMMAR_FILE)
 
 # open the grammar file and set up the parser
 try: 
@@ -19,10 +19,10 @@ try:
 
 except FileNotFoundError:
     print(f"Grammar file '{GRAMMAR_FILE}' not found at {PROJ_DIR}/. Please check the path.", file=sys.stderr)
-    exit(1)
+    clean_exit(1)
 except lark.exceptions.LarkError as e:
     print(f"Error in grammar file '{GRAMMAR_FILE}': {e}", file=sys.stderr)
-    exit(1)
+    clean_exit(1)
 
 # parse a given query string into a Lark Tree object
 def parse_query(query):

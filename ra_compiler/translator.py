@@ -19,15 +19,17 @@ class RATranslator(Transformer):
         
         def projection(self, args):
             prefix, attributes, table = args
+
             return {
                 "operation": "projection",
-                "keep_dups": True if self.dup_indicator in prefix.value else False,
+                "keep_dups": self.dup_indicator in prefix.value,
                 "table": table,
                 "attributes": attributes,
             }
 
         def selection(self, args):
             condition, table = args
+
             return {
                 "operation": "selection",
                 "table": table,
@@ -177,8 +179,8 @@ class RATranslator(Transformer):
         def table(self, args):
             return args[0]
 
-        def attributes(self, args):
-            return args
+        def attributes(self, attrs):
+            return attrs
             
         def attr(self, args):
             return {
@@ -188,11 +190,13 @@ class RATranslator(Transformer):
         
         def math_cond(self, args):
             left, op, right = args
-            return {"left": left, "op": op, "right": right}
+            eq = "" + left + op + str(right) + ""
+            return {"left": left, "op": op, "right": right, "eq": eq}
 
         def comp_cond(self, args):
             left, op, right = args
-            return {"left": left, "op": op, "right": right}
+            eq = "" + left + op + str(right) + ""
+            return {"left": left, "op": op, "right": right, "eq": eq}
 
         def aggr_cond(self, args):
             if len(args) == 1:
@@ -202,8 +206,14 @@ class RATranslator(Transformer):
             else:
                 raise ValueError("Invalid aggregation condition format")
             
-        def AND(self, args):
-            return "and"
+        def MATH_OP(self, token):
+            return token.value
+        
+        def COMP_OP(self, token):
+            return token.value
+        
+        def AND(self, _):
+            return "AND"
         
         def CNAME(self, token):
             return token.value

@@ -2,6 +2,7 @@
 
 import argparse
 import pandas as pd
+from .mysql import setup_mysql
 from .parser import parse_query
 from .translator import RATranslator
 from .executor import execute
@@ -20,8 +21,8 @@ def main():
         print(f"Using configuration file: {args.config_file}")
         # TODO: set up SQL connection
 
+    setup_mysql()
     run()
-
 
 def run():
     '''Repeatedly handle user input, parses queries, and displays results.'''
@@ -45,29 +46,18 @@ def run():
             if parsed_query is None:
                 continue
             # FOR TESTING: print the parsed query : Lark Tree
-            print("Parsed Query: ", parsed_query.pretty())
+            # print("Parsed Query: ", parsed_query.pretty())
 
             # translate the parsed query into an intermediate representation
             translation = RATranslator().transform(parsed_query)
             # FOR TESTING: print the translation
-            print("translator: ", translation)
-
-            # TODO: set up SQL connection to grab actual tables, for now dummy data
-            tables = {
-                "Students": pd.read_csv("test.csv"),
-                "T1": pd.read_csv("test.csv"),
-                "T2": pd.read_csv("test2.csv"),
-                "T3": pd.read_csv("test.csv").T,
-                "A": pd.read_csv("test.csv"),
-                "B": pd.read_csv("test.csv")['age'].add(2),
-                "C1": pd.read_csv("test.csv"),
-                "C2": pd.read_csv("test.csv").T,
-                "C3": pd.read_csv("test.csv")['age'].add(3),
-                "R": pd.read_csv("test.csv"),
-            }
+            print("translator: ", translation, "\n")
 
             # execute the translated query
-            result = execute(translation, tables)
+            result = execute(translation)
+            if result is None:
+                continue
+            
             # TODO: change to return the execution result in a separate window
             print("Execution Result:")
             print(result)
