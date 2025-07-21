@@ -20,7 +20,7 @@ unary_ops: projection
 
 projection: PROJ_PREFIX "{" attributes "}" table
 selection: _SEL_PREFIX "{" comp_cond "}" table
-group: _GROUP_PREFIX "{" attributes ";" aggr_cond "}" table
+group: _GROUP_PREFIX "{" attributes ";" aggr_conds "}" table
 rename: _RENAME_PREFIX "{" CNAME "}" table
 remove_duplicates: _REMOVE_DUPLICATES_PREFIX table
 sort: _SORT_PREFIX "{" sort_attributes"}" table  
@@ -32,6 +32,7 @@ PROJ_PREFIX: "/projection"
 
 _SEL_PREFIX: "/selection"
            | "/sigma"
+           | "/select"
 
 _GROUP_PREFIX: "/group_by"
              | "/group"
@@ -114,26 +115,32 @@ table: CNAME | "(" _expr ")"
 
 attributes: attr ("," attr)*
 sort_attributes: attr SORT_DIR ("," attr SORT_DIR)*
-?attr: CNAME ("." CNAME)*
-     | math_cond "->" CNAME
 
-math_cond: CNAME MATH_OP (CNAME | NUMBER)
+?attr: CNAME ("." CNAME)?
+     | math_cond "->" CNAME     // TODO: fix to be communitive
+     | CNAME "->" CNAME
+
+math_cond: attr MATH_OP (attr | NUMBER)  // TODO: fix to be communitive
         | "(" math_cond ")"
         
-comp_cond: attr COMP_OP (attr | NUMBER) 
+// TODO: fix to not allow NUMBER COMP_OP NUMBER but still be communitive
+comp_cond: _comp_cond_attr COMP_OP _comp_cond_attr 
           | "(" comp_cond ")"
-          | comp_cond (AND | or) comp_cond
+          | comp_cond (AND | OR) comp_cond
 
-aggr_cond: AGGR_OP "(" attr ")" ("," aggr_cond)?
+_comp_cond_attr: (attr | NUMBER | ESCAPED_STRING | math_cond) 
+
+aggr_conds: aggr_func ("," aggr_func)*
+aggr_func: AGGR_OP "(" attr ")"
 
 MATH_OP: "+" | "-" | "*" | "/" | "%" | "^"
 COMP_OP: ">" | "<" | ">=" | "<=" | "!=" | "==" | "="
 AGGR_OP: "sum"i | "count"i | "avg"i | "min"i | "max"i
-AND: "and"i | "&&" | "&"
-or: "or"i | "||" | "|"
-// eq: "==" | "="   // want to allow more options? TODO 
+AND: "and"i | "&&" | "&" 
+OR: "or"i | "||" | "|"
 SORT_DIR: "asc"i | "desc"i
 
+%import common.ESCAPED_STRING
 %import common.CNAME
 %import common.NUMBER
 %import common.WS

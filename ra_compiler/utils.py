@@ -1,6 +1,6 @@
 # ra_compiler/utils.py
 
-import sys
+import sys, traceback
 from . import mysql
 
 debug_counter = 1
@@ -13,6 +13,7 @@ def print_error(err_msg="", e="RACError"):
         etype = type(e).__name__
 
     print(f"(RAC-ERR) [{etype}] {err_msg}", file=sys.stderr)
+    # print(traceback.format_exc())
     return
 
 def print_debug(debug_msg=""):

@@ -3,50 +3,78 @@
 import pandas as pd
 from .mysql import run_query
 from .utils import clean_exit, print_error, print_debug
-from .exceptions import TableNotFoundError
+from .exceptions import *
 
-def execute(ra):
-    '''Execute a given relational algebra query.'''
-    print_debug(f"currently executing: {ra}")
+def execute(expr):
+    '''Execute a given relational algebra query and return the table name and table as a DataFrame.'''
+
+    operation = None
 
     try: 
-        if not isinstance(ra, dict):
-            raise TypeError("RA operation must be a dictionary representing the query.")
-        if "op_type" not in ra or "operation" not in ra:
-            raise ValueError("RA operation must contain 'op_type' and 'operation' key.")
+        if not isinstance(expr, dict):
+            raise TypeError("RA expression must be a dictionary representing the query.")
+        if "op_type" not in expr or "operation" not in expr:
+            raise ValueError("RA expression must contain 'op_type' and 'operation' key.")
 
-        df, df2 = get_tables(ra)
-        
+        df, df2 = get_tables(expr)
+
         # execute the operation
-        match ra["operation"]:
+        operation = expr["operation"]
+        match operation:
             case "projection":
-                return exec_projection(ra, df)
+                return exec_projection(expr, df)
             case "selection":
-                return exec_selection(ra, df)
+                return exec_selection(expr, df)
+            case "group":
+                return exec_group(expr, df)
+            case "rename": 
+                return exec_rename(expr, df)
+            case "remove_duplicates":
+                return exec_remove_duplicates(expr, df)
+            case "union":
+                return exec_union(expr, df, df2)
+            case "intersection":
+                return exec_interestion(expr, df, df2)
+            case "difference":
+                return exec_difference(expr, df, df2)
+            case "cross":
+                return exec_cross(expr, df, df2)
             case _:
-                raise ValueError(f"Unsupported operation: {ra['operation']}")
+                raise ValueError(f"Unsupported operation: {expr['operation']}")
             
     except TableNotFoundError as e:
         print_error(f"Table '{e.table_name}' does not exist in the database.", e)
+        return None, None
     except Exception as e:
-        print_error(f"An error occurred during execution: {e}", e)
-        clean_exit(1)
+        if not operation:
+            operation = ""
+        print_error(f"An error occurred during {operation} execution: {e}", e)
+        return None, None
 
-def get_tables(ra):
+def get_tables(expr):
     """Ensure the desired table(s) exist depending on the op_type."""
     
-    match ra["op_type"]:
+    match expr["op_type"]:
         case "unary":
-            df = check_load_table(ra["table"])
+            df = load_table(expr["table"])
             return df, None
         case "set" | "join":
-            df = check_load_table(ra["table1"])
-            df2 = check_load_table(ra["table2"])
+            df = load_table(expr["table1"])
+            df2 = load_table(expr["table2"])
+
+            if not df.columns.equals(df2.columns):
+                raise ValueError("Set operations require both tables to have the same columns in the same order.")
+
+            return df, df2
+        case "join":
+            df = load_table(expr["table1"])
+            df2 = load_table(expr["table2"])
+
             return df, df2
         case _:
-            raise ValueError(f"Unsupported operation type: {ra['op_type']}")
+            raise ValueError(f"Unsupported operation type: {expr['op_type']}")
 
-def check_load_table(table_name):
+def load_table(table_name):
     """Return a pandas DataFrame of the desired table from the SQL connection."""
 
     # if the table is a string, grab the table from SQL connection
@@ -66,225 +94,282 @@ def check_load_table(table_name):
     
     # otherwise, execute the nested operation
     else: 
-        return (execute(table_name)).copy()
+        table_name, table = (execute(table_name))
+        return table.copy()
     
 
 ## ~~~~~~~~ UNARY OPERATIONS ~~~~~~~~ ##
 
-def exec_projection(ra, df):
+def exec_projection(expr, df):
     """Execute a projection operation on the given DataFrame."""
 
-    try:
-        attributes = []
-        keep_dups = ra.get("keep_dups", False)
+    keep_dups = expr.get("keep_dups", False)
+    attributes = process_attributes(df, expr["attributes"])
 
-        # process each attr listed in the attributes
-        for i, attr in enumerate(ra["attributes"]):
-            # if a new col name, evaluate the cond and save the result as a new column
-            if isinstance(attr, dict):
-                df[attr["alias"]] = evaluate_math_condition(df, attr)
-                attributes.append(attr["alias"])
-            else:
-                attributes.append(attr)
-                        
-        # select the specified attributes
-        result_df = df[attributes]
-        
-        # handle duplicates if necessary
-        if not keep_dups:
-            result_df = result_df.drop_duplicates()
-        
-        return result_df
+    result_df = df[attributes]
     
-    except Exception as e:
-        print_error(f"An error occurred during projection execution: {e}", e)
-        clean_exit(1)
+    # handle duplicates if necessary
+    if not keep_dups:
+        return exec_remove_duplicates(expr, result_df)
+    
+    return expr['table_alias'], result_df
 
-def exec_selection(ra, df):
+
+def exec_selection(expr, df):
     """Execute the given selection operation on the given DataFrame."""
     
-    try:
-        cond = ra["condition"]
-        mask = evaluate_comparison_condition(df, cond)
+    cond = expr["condition"]
+    mask = evaluate_comparison_cond(df, cond)
 
-        return df[mask]
-        
-    except Exception as e:
-        print_error(f"An error occurred during selection execution: {e}", e)
-        clean_exit(1)
+    return expr['table_alias'], df[mask]
+
+
+def exec_group(expr, df):
+    """Execute the given group operation on the given DataFrame."""
+
+    group_attrs = process_attributes(df, expr["attributes"])
+    aggr_funcs = parse_aggr_conds(expr["aggr_cond"])
+
+    group_df = df.groupby(group_attrs, sort=False)
+
+    # Construct aggregation mapping for pandas
+    agg_dict = {}
+    for alias, (col, func) in aggr_funcs.items():
+        if col == "*":
+            # Special case for count(*): use .size()
+            agg_dict[alias] = ("", "size")
+        else:
+            agg_dict[alias] = pd.NamedAgg(column=col, aggfunc=func)
+
+    result_df = group_df.agg(**agg_dict).reset_index()
+    return expr['table_alias'], result_df
+
+
+def exec_rename(expr, df):
+    return expr["table_alias"], df
+
+def exec_remove_duplicates(expr, df):
+    return expr["table_alias"], df.drop_duplicates()
 
 
 ## ~~~~~~~~ SET OPERATIONS ~~~~~~~~ ##
 
-# def exec_union(ra, tables):
-#     """Execute the given union operation."""
+def exec_union(expr, df1, df2):
+    """Execute the given union operation."""
 
-#     try:
-#         df1 = get_table(ra["table1"], tables)
-#         df2 = get_table(ra["table2"], tables)
-#         keep_dups = ra.get("keep_dups", False)
+    keep_dups = expr.get("keep_dups", False)
 
-#         # combine the two sets
-#         result_df = pd.concat([df1, df2], ignore_index=True)
+    # combine the two sets
+    result_df = pd.concat([df1, df2], ignore_index=True)
+
+    # handle duplicates if necessary
+    if not keep_dups:
+        return exec_remove_duplicates(expr, result_df)
+
+    return expr['table_alias'], result_df
+        
+
+def exec_interestion(expr, df1, df2):
+    """Execute the given intersection operation."""
+
+    keep_dups = expr.get("keep_dups", False)
+    df1_dr, df2_dr = prepare_for_set_op(df1, df2, keep_dups)
+        
+    # merge the data frames and keep only the relevant columns
+    inter = pd.merge(df1_dr, df2_dr)
+    result_df = inter[df1.columns]
+
+    return expr['table_alias'], result_df
+
+
+def exec_difference(expr, df1, df2):
+    """Execute the given difference operation."""
+
+    keep_dups = expr.get("keep_dups", False)
+    df1_dr, df2_dr = prepare_for_set_op(df1, df2, keep_dups)
+
+    # merge the data frames and keep only the relevant columns/rows
+    merged = pd.merge(df1_dr, df2_dr, how="left", indicator=True)
+    diff = merged[merged['_merge'] == 'left_only']
+    result_df = diff[df1.columns]
+
+    return expr["table_alias"], result_df
+
+
+def prepare_for_set_op(df1, df2, keep_dups=False):
+    """Prepares two DataFrames for set operations by either dropping duplicates
+    or adding row counts (for bag semantics)."""
+
+    # remove duplicates if not a bag
+    if not keep_dups:
+        df1_clean = df1.drop_duplicates()
+        df2_clean = df2.drop_duplicates()
+
+    # if a bag, add row counts to keep desired duplication
+    else:
+        def add_row_counts(df):
+            '''Add row counts to the rows to preserve minimal duplication.'''
+            return df.assign(
+                _rownum=df.groupby(df.columns.tolist()).cumcount()
+            )
+        df1_clean = add_row_counts(df1)
+        df2_clean = add_row_counts(df2)
     
-#         # handle duplicates if necessary
-#         if not keep_dups:
-#             result_df = result_df.drop_duplicates()
-
-#         return result_df
-        
-#     except Exception as e:
-#         print(f"An error occurred during union execution. {type(e).__name__}: {e}")
-#         clean_exit(1)
-
-# def exec_interestion(ra, tables):
-#     """Execute the given intersection operation."""
-
-#     try:
-#         df1 = get_table(ra["table1"], tables)
-#         df2 = get_table(ra["table2"], tables)
-#         keep_dups = ra.get("keep_dups", False)
-
-#         # remove duplicates if not a bag intersection
-#         if not keep_dups:
-#             df1_dr = df1.drop_duplicates()
-#             df2_dr = df2.drop_duplicates()
-
-#         # if a bag intersection, add row counts to keep desired duplication
-#         else:
-#             def add_row_counts(df):
-#                 return df.assign(
-#                     _rownum=df.groupby(df.columns.tolist()).cumcount()
-#                 )
-           
-#             df1_dr = add_row_counts(df1)
-#             df2_dr = add_row_counts(df2)
-            
-#         # merge the data frames and keep only the relevant columns
-#         inter = pd.merge(df1_dr, df2_dr)
-#         result_df = inter[df1.columns]
-
-#         return result_df
-        
-#     except Exception as e:
-#         print(f"An error occurred during intersection execution. {type(e).__name__}: {e}")
-#         clean_exit(1)  
-
-# def exec_difference(ra, tables):
-#     """Execute the given difference operation."""
-
-#     try:
-#         df1 = get_table(ra["table1"], tables)
-#         df2 = get_table(ra["table2"], tables)
-#         keep_dups = ra.get("keep_dups", False)
-
-#         # remove duplicates if not a bag difference
-#         if not keep_dups:
-#             df1_dr = df1.drop_duplicates()
-#             df2_dr = df2.drop_duplicates()
-
-#         # if a bag intersection, add row counts to keep desired duplication
-#         else:
-#             def add_row_counts(df):
-#                 return df.assign(
-#                     _rownum=df.groupby(df.columns.tolist()).cumcount()
-#                 )
-           
-#             df1_dr = add_row_counts(df1)
-#             df2_dr = add_row_counts(df2)
-
-#         # merge the data frames and keep only the relevant columns/rows
-#         merged = pd.merge(df1_dr, df2_dr, how="left", indicator=True)
-#         diff = merged[merged['_merge'] == 'left_only']
-#         result_df = diff[df1.columns]
-
-#         return result_df
-        
-#     except Exception as e:
-#         print(f"An error occurred during difference execution. {type(e).__name__}: {e}")
-#         clean_exit(1)  
-
+    return df1_clean, df2_clean
 
 ## ~~~~~~~~ JOIN OPERATIONS ~~~~~~~~ ##
 
-# def exec_cross(ra, tables):
-#     """Execute the given cross operation."""
+def exec_cross(expr, df1, df2):
+    """Execute the given cross operation."""
 
-#     try:
-#         df1 = get_table(ra["table1"], tables)
-#         df2 = get_table(ra["table2"], tables)
+    result_df = pd.merge(df1, df2, how="cross")
 
-#         result_df = pd.merge(df1, df2, how="cross")
+    return expr["table_alias"], result_df
 
-#         return result_df
-    
-#     except Exception as e:
-#         print(f"An error occurred during cross execution. {type(e).__name__}: {e}")
-#         clean_exit(1)
-
-# def exec_join(ra, tables):
-#     """Execute the given join operation."""
-
-#     try:
-#         df1 = get_table(ra["table1"], tables)
-#         df2 = get_table(ra["table2"], tables)
-
-
-
-#     except Exception as e:
-#         print(f"An error occurred during cross execution. {type(e).__name__}: {e}")
-#         clean_exit(1)
 
 ## ~~~~~~~~ TABLES, ATTRIBUTES, & OTHER ~~~~~~~~ ##
 
+def resolve_operand(df, operand):
+    """Resolve a column reference, literal, or math expression into a value or Series."""
 
-def evaluate_math_condition(df, attr):
-    """Evaluate a math condition and add the result as a new column."""
-    left = attr['cond']["left"]
-    op = attr['cond']["op"]
-    right = attr['cond']["right"]
+    try:
 
-    if isinstance(right, int):
-        right = int(right)
-    elif right.isidentifier():
-        right = df[right]
+        # evaltuate math or comp conditions
+        if isinstance(operand, dict):
+            t = operand.get("type")
+            if t == "math_cond":
+                return evaluate_math_cond(df, operand)
+            elif t == "comp_cond":
+                return evaluate_comparison_cond(df, operand)
+            else:
+                raise ValueError(f"Unknown operand type: {t}")
+
+        # resolve table.attr names
+        if isinstance(operand, list):
+            return resolve_operand(df, operand[-1])
+
+        # if a string wrapped in "", assume a string literal, otherwise col name
+        if isinstance(operand, str):
+            if ((operand.startswith('"') and operand.endswith('"')) 
+                or (operand.startswith("'") and operand.endswith("'"))):
+                return operand.strip('"\'')
+            return df[operand]
+
+        # if a number, just return
+        return operand
+
+    except KeyError as e:
+        raise InvalidColumnName(e.args[0])
+
+def evaluate_math_cond(df, expr):
+    """Evaluate a math expression with the given df."""
+    left = resolve_operand(df, expr["left"])
+    right = resolve_operand(df, expr["right"])
+    op = expr["op"]
 
     if op == "+":
-        return df[left] + right
+        return left + right
     elif op == "-":
-        return df[left] - right
+        return left - right
     elif op == "*":
-        return df[left] * right
+        return left * right
     elif op == "/":
-        return df[left] / right
+        return left / right
+    elif op == "%":
+        return left % right
+    elif op == "^":
+        return left ** right
     else:
-        raise ValueError(f"Unsupported math operation: {op}")
+        raise ValueError(f"Unsupported math operator: {op}")
+    
+def evaluate_comparison_cond(df, cond):
+    """Recursively evaluate a comparison or logical condition."""
 
-def evaluate_comparison_condition(df, cond):
-    """Evaluate a comparison condition and return a boolean mask."""
-    left = cond["left"]
+    # recursive and/or condition
+    if cond["op"] in {"AND", "OR"}:
+        left_mask = evaluate_comparison_cond(df, cond["left"])
+        right_mask = evaluate_comparison_cond(df, cond["right"])
+
+        if cond["op"] == "AND":
+            return left_mask & right_mask
+        else:
+            return left_mask | right_mask
+
+    # binary comparison operator
+    left_val = resolve_operand(df, cond["left"])
+    right_val = resolve_operand(df, cond["right"])
     op = cond["op"]
-    right = cond["right"]
 
     if op == ">":
-        return df[left] > right
+        return left_val > right_val
     elif op == "<":
-        return df[left] < right
-    elif op == "=" or op == "==":
-        return df[left] == right
+        return left_val < right_val
+    elif op in {"=", "=="}:
+        return left_val == right_val
     elif op == ">=":
-        return df[left] >= right
+        return left_val >= right_val
     elif op == "<=":
-        return df[left] <= right
+        return left_val <= right_val
     elif op == "!=":
-        return df[left] != right
-    elif op == "and":
-        left_mask = evaluate_comparison_condition(df, cond["left"])
-        right_mask = evaluate_comparison_condition(df, cond["right"])
-        return left_mask & right_mask
-    elif op == "or":
-        left_mask = evaluate_comparison_condition(df, cond["left"])
-        right_mask = evaluate_comparison_condition(df, cond["right"])
-        return left_mask | right_mask
+        return left_val != right_val
     else:
         raise ValueError(f"Unsupported comparison operator: {op}")
+
+def process_attributes(df, attributes_expr):
+    """
+    Process a list of attribute expressions, modifying the DataFrame in place
+    to include any computed columns, and returning a list of column names.
+
+    Args:
+        df (pd.DataFrame): the dataframe to operate on
+        attributes_expr (list): list of attributes (strings, lists, or dicts)
+
+    Returns:
+        list: list of column names (including computed ones)
+    """
+    processed_attrs = []
+
+    for attr in attributes_expr:
+        if isinstance(attr, dict):
+            # compute an aliased column
+            alias = attr["alias"]
+            df[alias] = evaluate_math_cond(df, attr["cond"])
+            processed_attrs.append(alias)
+        elif isinstance(attr, list):
+            # handle a dotted column name
+            processed_attrs.append(attr[-1])
+        else:
+            processed_attrs.append(attr)
+
+    return processed_attrs
+
+def parse_aggr_conds(aggr_conds):
+    """
+    Convert aggr_cond expressions into a dict of output_column -> (col, agg_func),
+    e.g., {"sum_salary": ("salary", "sum")}
+    """
+    aggr_funcs = {}
+    AGGR_OP_MAP = {
+        "sum": "sum",
+        "count": "count",
+        "avg": "mean",
+        "min": "min",
+        "max": "max"
+    }
+
+    for aggr in aggr_conds:
+        op = aggr["aggr"].lower()
+        attr = aggr["attr"]
+        col = attr[-1] if isinstance(attr, list) else attr
+
+        # Special handling for count(*)
+        if op == "count" and col == "*":
+            alias = "count_star"
+            aggr_funcs[alias] = ("*", "size")  # pandas .size() handles count(*)
+        else:
+            if op not in AGGR_OP_MAP:
+                raise ValueError(f"Unsupported aggregation operator: {op}")
+            alias = f"{op}_{col}"
+            aggr_funcs[alias] = (col, AGGR_OP_MAP[op])
+
+    return aggr_funcs

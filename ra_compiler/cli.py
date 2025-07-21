@@ -6,7 +6,7 @@ from .mysql import setup_mysql
 from .parser import parse_query
 from .translator import RATranslator
 from .executor import execute
-from .utils import clean_exit
+from .utils import clean_exit, print_error
 
 def main():
     '''Main entry point for the RACompiler command line interface.'''
@@ -32,6 +32,7 @@ def run():
         print("Type 'exit' to quit the application.")
         print("Type 'help' for a list of supported functions and syntax. [TODO]")
 
+        query_counter = 0
         while True:
             # grab user input
             query = input("> ")
@@ -46,10 +47,15 @@ def run():
             if parsed_query is None:
                 continue
             # FOR TESTING: print the parsed query : Lark Tree
-            # print("Parsed Query: ", parsed_query.pretty())
+            print("Parsed Query: ", parsed_query.pretty())
 
             # translate the parsed query into an intermediate representation
-            translation = RATranslator().transform(parsed_query)
+            translation = None
+            try:
+                translation = RATranslator(query_counter).transform(parsed_query)
+            except Exception as e:
+                print_error(f"An error occurred during translation: {e}", "TranslationError")
+                continue
             # FOR TESTING: print the translation
             print("translator: ", translation, "\n")
 
@@ -57,15 +63,23 @@ def run():
             result = execute(translation)
             if result is None:
                 continue
+
+            table_name, table_result = result
+            if table_result is None:
+                continue
             
             # TODO: change to return the execution result in a separate window
             print("Execution Result:")
-            print(result)
+            print(table_name)
+            print(table_result)
+                        
+            query_counter += 1
+
 
     except KeyboardInterrupt:
         clean_exit()
     except EOFError:
         clean_exit()
     except Exception as e:
-        print(f"An Error Occurred: {e}")    
+        print_error(f"An Error Occurred: {e}", e)    
         clean_exit(1)
