@@ -182,11 +182,11 @@ class RATranslator(Transformer):
 
     def divide(self, items):
         table1, table2 = items
-        return {
+        return self.add_alias({
             "operation": "divide",
             "table1": table1,
             "table2": table2,
-        }
+        })
 
     ## ~~~~~~~~ TABLES, ATTRIBUTES, & OTHER ~~~~~~~~ ##
 

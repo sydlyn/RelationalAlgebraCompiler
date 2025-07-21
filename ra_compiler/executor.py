@@ -39,6 +39,10 @@ def execute(expr):
                 return exec_difference(expr, df, df2)
             case "cross":
                 return exec_cross(expr, df, df2)
+            case "join":
+                return
+            case "divide":
+                return exec_divide(expr, df, df2)
             case _:
                 raise ValueError(f"Unsupported operation: {expr['operation']}")
             
@@ -47,7 +51,8 @@ def execute(expr):
         return None, None
     except Exception as e:
         if not operation:
-            operation = ""
+            operation = "query"
+
         print_error(f"An error occurred during {operation} execution: {e}", e)
         return None, None
 
@@ -58,7 +63,7 @@ def get_tables(expr):
         case "unary":
             df = load_table(expr["table"])
             return df, None
-        case "set" | "join":
+        case "set":
             df = load_table(expr["table1"])
             df2 = load_table(expr["table2"])
 
@@ -155,7 +160,7 @@ def exec_remove_duplicates(expr, df):
 ## ~~~~~~~~ SET OPERATIONS ~~~~~~~~ ##
 
 def exec_union(expr, df1, df2):
-    """Execute the given union operation."""
+    """Execute the given union operation on the given DataFrames."""
 
     keep_dups = expr.get("keep_dups", False)
 
@@ -170,7 +175,7 @@ def exec_union(expr, df1, df2):
         
 
 def exec_interestion(expr, df1, df2):
-    """Execute the given intersection operation."""
+    """Execute the given intersection operation on the given DataFrames."""
 
     keep_dups = expr.get("keep_dups", False)
     df1_dr, df2_dr = prepare_for_set_op(df1, df2, keep_dups)
@@ -183,7 +188,7 @@ def exec_interestion(expr, df1, df2):
 
 
 def exec_difference(expr, df1, df2):
-    """Execute the given difference operation."""
+    """Execute the given difference operation on the given DataFrames."""
 
     keep_dups = expr.get("keep_dups", False)
     df1_dr, df2_dr = prepare_for_set_op(df1, df2, keep_dups)
@@ -208,7 +213,7 @@ def prepare_for_set_op(df1, df2, keep_dups=False):
     # if a bag, add row counts to keep desired duplication
     else:
         def add_row_counts(df):
-            '''Add row counts to the rows to preserve minimal duplication.'''
+            '''Add row counts to the rows.'''
             return df.assign(
                 _rownum=df.groupby(df.columns.tolist()).cumcount()
             )
@@ -220,12 +225,48 @@ def prepare_for_set_op(df1, df2, keep_dups=False):
 ## ~~~~~~~~ JOIN OPERATIONS ~~~~~~~~ ##
 
 def exec_cross(expr, df1, df2):
-    """Execute the given cross operation."""
+    """Execute the given cross operation on the given DataFrames."""
 
     result_df = pd.merge(df1, df2, how="cross")
 
     return expr["table_alias"], result_df
 
+def exec_join(expr, df1, df2):
+    """Execute the given join operation on the given DataFrames."""
+
+    # TODO
+
+    return expr["table_alias"], None
+
+def exec_divide(expr, df1, df2):
+    """Execute the given divide operation on the given DataFrames."""
+
+    df1 = df1.drop_duplicates()
+    df2 = df2.drop_duplicates()
+
+    # divisor columns and columns separate from the divisors
+    divisor_cols = df2.columns.tolist()
+    remaining_cols = [col for col in df1.columns if col not in divisor_cols]
+
+    # ensure df2 columns are subset of df1
+    if not set(divisor_cols).issubset(set(df1.columns)):
+        raise ValueError("All columns in divisor must exist in dividend.")
+
+    # get all combinations of the canidates with the divisors
+    candidates = df1[remaining_cols].drop_duplicates()
+    cross = candidates.merge(df2, how='cross')
+
+    # find which tuples in df1 match the candidate combinations
+    matched = df1.merge(cross)
+
+    # count how many divisor matches per candidate group
+    grouped = matched.groupby(remaining_cols, sort=False)
+    full_matches = grouped.size().reset_index(name='_count')
+
+    # only keep those with a full match to all df2 rows
+    result_df = (full_matches[full_matches['_count'] == len(df2)])[remaining_cols]
+
+    return expr["table_alias"], result_df
 
 ## ~~~~~~~~ TABLES, ATTRIBUTES, & OTHER ~~~~~~~~ ##
 
