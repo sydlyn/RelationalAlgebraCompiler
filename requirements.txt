@@ -1,2 +1,2 @@
-lark
-argparse
+lark-parser>=0.11.0
+mysql-connector-python>=8.0.25
