@@ -3,7 +3,7 @@
 import os, sys
 from lark import Lark
 import lark.exceptions
-from .utils import clean_exit
+from .utils import clean_exit, print_error
 
 # path to lark grammar file
 GRAMMAR_FILE = 'grammar.lark'
@@ -42,8 +42,10 @@ def parse_query(query):
 
     except lark.exceptions.UnexpectedToken as e:
         handle_unexpected_token(query, e)
+    except lark.exceptions.UnexpectedCharacters as e:
+        print_error(f"Unrecognized character found in query: {e.char}", e)
     except Exception as e:
-        print(f"An error occurred during parsing: {e}")
+        print_error(f"An error occurred during parsing: {e}", e)
         clean_exit(1)
 
 # print helpful error messages based on the type of unexpected token encountered
@@ -71,9 +73,10 @@ def handle_unexpected_token(query, error):
 
         print(f"### Error Parsing Query ###")
 
+
+
         # get the tokens that are allowed at the error position
         allowed = error.accepts or error.expected
-
         # if the only allowed tokens are parentheses...
         if allowed == {'LPAR'} or allowed == {'RPAR'}:
             print("Missing parentheses.")

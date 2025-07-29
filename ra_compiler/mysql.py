@@ -95,5 +95,3 @@ def handle_SQL_error(e, sql):
     else:
         print_error(f"SQL execution error: {e}", e)
         clean_exit(1)
-
-

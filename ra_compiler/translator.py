@@ -69,10 +69,10 @@ class RATranslator(Transformer):
 
     def remove_duplicates(self, items):
         table = items[0]
-        return {
+        return self.add_alias({
             "operation": "remove_duplicates",
             "table": table,
-        }
+        })
     
     def sort(self, items):
         sort_attributes, table = items
@@ -129,56 +129,46 @@ class RATranslator(Transformer):
     
     def join(self, items):
         if len(items) == 3:
-            left, join_type, right = items
-            condition = None
+            table1, join_prefix, table2 = items
+            specs = None
         elif len(items) == 4:
-            left, join_type, condition, right = items
+            table1, join_prefix, specs, table2 = items                
         else:
             raise ValueError(f"Unexpected number of items in join: {len(items)}")
+        
+        # determine what type of join by the prefix
+        def get_join_type(join_prefix):
+            join = join_prefix.lstrip('/').lower()
 
-        return {
+            if "semi" in join:
+                if "right" in join:
+                    return "semi", "right"
+                else:
+                    return "semi", "left"
+                
+            if "right" in join:
+                return "right"
+            elif "left" in join:
+                return "left"
+            elif "full" in join or "outer" in join:
+                return "outer"
+            else:
+                return "inner"
+
+        join_dict = {
             "operation": "join",
-            "join_type": str(join_type),
-            "left": left,
-            "right": right,
-            "condition": condition
+            "join_type": get_join_type(join_prefix),
+            "table1": table1,
+            "table2": table2,
         }
 
-    def join(self, items):
-        if len(items) == 3:
-            left, join_type, right = items
-            condition = None
-        elif len(items) == 4:
-            left, join_type, condition, right = items
-        else:
-            raise ValueError(f"Unexpected number of items in join: {len(items)}")
+        # deterine if given a list of attributes or a comp condition
+        if isinstance(specs, list):
+            join_dict["attributes"] = specs
+        elif isinstance(specs, dict):
+            join_dict["condition"] = specs
 
-        # Normalize join type string
-        join_str = str(join_type).lower().replace('/', '').replace('_', ' ')
-        if 'semi' in join_str:
-            join_sql = 'SEMI JOIN'
-        elif 'inner' in join_str:
-            join_sql = 'INNER JOIN'
-        elif 'left' in join_str:
-            join_sql = 'LEFT OUTER JOIN'
-        elif 'right' in join_str:
-            join_sql = 'RIGHT OUTER JOIN'
-        elif 'full' in join_str:
-            join_sql = 'FULL OUTER JOIN'
-        else:
-            join_sql = 'JOIN'  # fallback
-
-        # Determine ON condition
-        if condition is None:
-            on_clause = ""
-        elif isinstance(condition, list):  # case: attribute list e.g. {A,B}
-            # Produce C1.A = C2.A AND C1.B = C2.B
-            conditions = [f"{left}.{attr} = {right}.{attr}" for attr in condition]
-            on_clause = " ON " + " AND ".join(conditions)
-        else:  # case: a specific comparison like C1.A = C2.B
-            on_clause = f" ON {condition}"
-
-        return {"SQL": f"SELECT * FROM {left} {join_sql} {right}{on_clause}"}
+        return self.add_alias(join_dict)
 
     def divide(self, items):
         table1, table2 = items
@@ -197,7 +187,6 @@ class RATranslator(Transformer):
         return attrs
         
     def attr(self, items):
-        print_debug(items)
         if isinstance(items[0], (dict)):
             return {
                 'alias': str(items[1]),

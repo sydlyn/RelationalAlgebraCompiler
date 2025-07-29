@@ -5,8 +5,8 @@ import pandas as pd
 from .mysql import setup_mysql
 from .parser import parse_query
 from .translator import RATranslator
-from .executor import execute
-from .utils import clean_exit, print_error
+from .executor import execute, saved_results
+from .utils import clean_exit, print_error, print_debug
 
 def main():
     '''Main entry point for the RACompiler command line interface.'''
@@ -42,36 +42,16 @@ def run():
             if query.lower().strip(" /,.()") in exit_commands:
                 clean_exit()
 
-            # if given a bad input for parsing, continue to the next iteration
-            parsed_query = parse_query(query)
-            if parsed_query is None:
-                continue
-            # FOR TESTING: print the parsed query : Lark Tree
-            print("Parsed Query: ", parsed_query.pretty())
-
-            # translate the parsed query into an intermediate representation
-            translation = None
-            try:
-                translation = RATranslator(query_counter).transform(parsed_query)
-            except Exception as e:
-                print_error(f"An error occurred during translation: {e}", "TranslationError")
-                continue
-            # FOR TESTING: print the translation
-            print("translator: ", translation, "\n")
-
-            # execute the translated query
-            result = execute(translation)
+            result = handle_query(query, query_counter)
             if result is None:
-                continue
-
-            table_name, table_result = result
-            if table_result is None:
+                print("An error occurred while processing the query. Please try again.")
                 continue
             
             # TODO: change to return the execution result in a separate window
+
             print("Execution Result:")
-            print(table_name)
-            print(table_result)
+            print(result.name)
+            print(result.df)
                         
             query_counter += 1
 
@@ -83,3 +63,28 @@ def run():
     except Exception as e:
         print_error(f"An Error Occurred: {e}", e)    
         clean_exit(1)
+
+def handle_query(query, query_count=0):
+    """Parse, translate, and execute a single query input."""
+
+    parsed_query = parse_query(query)
+    if parsed_query is None:
+        return None
+    # FOR TESTING: print the parsed query : Lark Tree
+    print("Parsed Query: ", parsed_query.pretty())
+      
+    # translate the parsed query into an intermediate representation
+    translation = None
+    try:
+        translation = RATranslator(query_count).transform(parsed_query)
+    except Exception as e:
+        print_error(f"An error occurred during translation: {e}", "TranslationError")
+        return None
+
+    # execute the translated query
+    result = execute(translation)
+    if result is None:
+        return None
+
+    saved_results[result.name] = result
+    return result

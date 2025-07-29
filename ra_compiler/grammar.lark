@@ -25,29 +25,29 @@ rename: _RENAME_PREFIX "{" CNAME "}" table
 remove_duplicates: _REMOVE_DUPLICATES_PREFIX table
 sort: _SORT_PREFIX "{" sort_attributes"}" table  
 
-PROJ_PREFIX: "/projection"
-           | "/projection^d"
-           | "/pi"
-           | "/pi^d"
+PROJ_PREFIX: "/projection"i
+           | "/projection^d"i
+           | "/pi"i
+           | "/pi^d"i
 
-_SEL_PREFIX: "/selection"
-           | "/sigma"
-           | "/select"
+_SEL_PREFIX: "/selection"i
+           | "/sigma"i
+           | "/select"i
 
-_GROUP_PREFIX: "/group_by"
-             | "/group"
-             | "/gamma"
+_GROUP_PREFIX: "/group_by"i
+             | "/group"i
+             | "/gamma"i
 
-_RENAME_PREFIX: "/rename"
-             | "/rho"
+_RENAME_PREFIX: "/rename"i
+             | "/rho"i
 
-_REMOVE_DUPLICATES_PREFIX: "/remove_duplicates"
-                        | "/remove_dups"
-                        | "/delta"
+_REMOVE_DUPLICATES_PREFIX: "/remove_duplicates"i
+                        | "/remove_dups"i
+                        | "/delta"i
 
-_SORT_PREFIX: "/sort"
-           | "/order"
-           | "/tau"
+_SORT_PREFIX: "/sort"i
+           | "/order"i
+           | "/tau"i
 
 
 // ~~~~~~~~ SET OPERATIONS ~~~~~~~~ //
@@ -60,20 +60,20 @@ union: table UNION_PREFIX table // ("," table)*
 intersection: table INTERSECT_PREFIX table // ("," table)*
 difference: table DIFFERENCE_PREFIX table // ("," table)*
 
-UNION_PREFIX: "/union"
-            | "/u"
-            | "/union^d"
-            | "/u^d"
+UNION_PREFIX: "/union"i
+            | "/u"i
+            | "/union^d"i
+            | "/u^d"i
 
-INTERSECT_PREFIX: "/intersect"
-                   | "/inter"
-                   | "/intersect^d"
-                   | "/inter^d"
+INTERSECT_PREFIX: "/intersect"i
+                   | "/inter"i
+                   | "/intersect^d"i
+                   | "/inter^d"i
 
-DIFFERENCE_PREFIX: "/difference"
-                 | "/diff"
-                 | "/difference^d"
-                 | "/diff^d"
+DIFFERENCE_PREFIX: "/difference"i
+                 | "/diff"i
+                 | "/difference^d"i
+                 | "/diff^d"i
 
 
 // ~~~~~~~~ JOIN OPERATIONS ~~~~~~~~ //
@@ -86,28 +86,19 @@ cross: table _CROSS_PREFIX table
 join: table JOIN_PREFIX ("{" (attributes | comp_cond) "}")? table
 divide: table _DIVIDE_PREFIX table
 
-_CROSS_PREFIX: "/cross_product"
-            | "/cross"
+_CROSS_PREFIX: "/cross_product"i
+            | "/cross"i
             | "/x"i
 
-JOIN_PREFIX: /\/join/
-            | /\/inner_join/
-            | /\/left_outer_join/
-            | /\/left_join/
-            | /\/left_outer/
-            | /\/right_outer_join/
-            | /\/right_join/
-            | /\/right_outer/
-            | /\/full_outer_join/
-            | /\/full_join/
-            | /\/full_outer/
-            | /\/left_semi(_join)?/
-            | /\/left_semi/
-            | /\/right_semi_join/
-            | /\/right_semi/
+JOIN_PREFIX: /\/(inner_)?j(oin)?/i
+            | /\/left(_outer)?(_j(oin)?)?/i
+            | /\/right(_outer)?(_j(oin)?)?/i
+            | /\/full(_outer)?(_j(oin)?)?|outer(_j(oin)?)?/i
+            | /\/(left_)?semi(_j(oin)?)?/i
+            | /\/right_semi(_j(oin)?)?/i
 
-_DIVIDE_PREFIX: "/divide"
-              | "/div"
+_DIVIDE_PREFIX: "/divide"i
+              | "/div"i
 
 // ~~~~~~~~ TABLES, ATTRIBUTES, & OTHER ~~~~~~~~ //
 
