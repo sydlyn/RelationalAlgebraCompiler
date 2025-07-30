@@ -81,7 +81,7 @@ def get_tables(expr):
             df = load_table(expr["table1"])
             df2 = load_table(expr["table2"])
 
-            if not df.columns.equals(df2.columns):
+            if not df.df.columns.equals(df2.df.columns):
                 raise ValueError("Set operations require both tables to have the same columns in the same order.")
 
             return df, df2
@@ -140,7 +140,7 @@ def exec_projection(expr, ndf):
     
     # handle duplicates if necessary
     if not keep_dups:
-        result_df.drop_duplicates()
+        result_df = result_df.drop_duplicates()
     
     return NamedDataFrame(expr['table_alias'], result_df, ndf.origin_name)
 
@@ -185,7 +185,7 @@ def exec_rename(expr, ndf):
 
 def exec_remove_duplicates(expr, ndf):
     """Remove duplicates from the given DataFrame."""
-    return NamedDataFrame(expr["table_alias"], ndf.drop_duplicates(), ndf.origin_name)
+    return NamedDataFrame(expr["table_alias"], ndf.df.drop_duplicates(), ndf.origin_name)
 
 
 ## ~~~~~~~~ SET OPERATIONS ~~~~~~~~ ##
@@ -200,7 +200,7 @@ def exec_union(expr, df1, df2):
 
     # handle duplicates if necessary
     if not keep_dups:
-        return exec_remove_duplicates(expr, result_df)
+        result_df = result_df.drop_duplicates()
 
     return NamedDataFrame(expr['table_alias'], result_df)
         

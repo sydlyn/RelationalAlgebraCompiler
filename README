@@ -46,13 +46,13 @@ This will install RACompiler in editable mode and register the `rac` command.
 ### 4. Configure your database connection
 
 Create a `.env` file in the project root with your MySQL credentials:
-
+```
 DB_HOST=your_host  
-DB_PORT=your_port (defaults to 3306)  
+DB_PORT=your_port           # defaults to 3306
 DB_USER=your_user  
 DB_PASSWORD=your_password  
-DB_DATABASE=your_database  
-
+DB_NAME=your_database  
+```
 ---
 
 ### Usage
@@ -79,7 +79,7 @@ pytest -q
 
 ---
 
-Project Structure
+### Project Structure
 ```
 RACompiler/  
 ├── ra_compiler/        # Main package source code  
