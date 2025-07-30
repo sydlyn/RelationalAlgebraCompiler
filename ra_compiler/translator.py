@@ -76,11 +76,11 @@ class RATranslator(Transformer):
     
     def sort(self, items):
         sort_attributes, table = items
-        return {
+        return self.add_alias({
             "operation": "sort",
             "table": table,
             "sort_attributes": sort_attributes,
-        }
+        })
     
     ## ~~~~~~~~ SET OPERATIONS ~~~~~~~~ ##
 
@@ -185,7 +185,11 @@ class RATranslator(Transformer):
 
     def attributes(self, attrs):
         return attrs
-        
+    
+    def sort_attributes(self, attrs):
+        return attrs
+            
+    #TODO: implemet b->b_new
     def attr(self, items):
         if isinstance(items[0], (dict)):
             return {
@@ -194,6 +198,9 @@ class RATranslator(Transformer):
             }
         else:
             return items
+        
+    def sort_attr(self, items):
+        return (items[0], items[1])
     
     def math_cond(self, items):
         if len(items) == 1:
@@ -224,9 +231,9 @@ class RATranslator(Transformer):
     
     def aggr_func(self, items):
         if len(items) == 1:
-            return {"aggr": str(items[0])}
+            return {"aggr": items[0]}
         elif len(items) == 2:
-            return {"aggr": str(items[0]), "attr": str(items[1])}
+            return {"aggr": items[0], "attr": items[1]}
         else:
             raise ValueError("Invalid aggregation condition format")
         
@@ -236,11 +243,17 @@ class RATranslator(Transformer):
     def COMP_OP(self, token):
         return token.value
     
+    def AGGR_OP(self, token):
+        return token.value
+    
     def AND(self, _):
         return "AND"
     
     def OR(self, _):
         return "OR"
+    
+    def SORT_DIR(self, token):
+        return token.value.upper() == "ASC"
     
     def CNAME(self, token):
         return token.value

@@ -93,7 +93,7 @@ _CROSS_PREFIX: "/cross_product"i
 JOIN_PREFIX: /\/(inner_)?j(oin)?/i
             | /\/left(_outer)?(_j(oin)?)?/i
             | /\/right(_outer)?(_j(oin)?)?/i
-            | /\/full(_outer)?(_j(oin)?)?|outer(_j(oin)?)?/i
+            | /\/full(_outer)?(_j(oin)?)?|\/outer(_j(oin)?)?/i
             | /\/(left_)?semi(_j(oin)?)?/i
             | /\/right_semi(_j(oin)?)?/i
 
@@ -105,7 +105,8 @@ _DIVIDE_PREFIX: "/divide"i
 table: CNAME | "(" _expr ")"
 
 attributes: attr ("," attr)*
-sort_attributes: attr SORT_DIR ("," attr SORT_DIR)*
+sort_attributes: sort_attr ("," sort_attr)*
+sort_attr: attr SORT_DIR
 
 ?attr: CNAME ("." CNAME)?
      | math_cond "->" CNAME     // TODO: fix to be communitive

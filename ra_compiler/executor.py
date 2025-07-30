@@ -45,6 +45,8 @@ def execute(expr):
                 return exec_rename(expr, df)
             case "remove_duplicates":
                 return exec_remove_duplicates(expr, df)
+            case "sort":
+                return exec_sort(expr, df)
             case "union":
                 return exec_union(expr, df, df2)
             case "intersection":
@@ -185,7 +187,24 @@ def exec_rename(expr, ndf):
 
 def exec_remove_duplicates(expr, ndf):
     """Remove duplicates from the given DataFrame."""
+
     return NamedDataFrame(expr["table_alias"], ndf.df.drop_duplicates(), ndf.origin_name)
+
+def exec_sort(expr, ndf):
+    """Sort the DataFrame based on the given attributes."""
+    
+    df = ndf.df
+    sort_attrs = expr["sort_attributes"]
+
+    for attr in sort_attrs:
+        # ensure the attribute is a valid column in the DataFrame
+        col = attr[0]
+        if col not in df.columns:
+            raise InvalidColumnName(col)
+        
+        result_df = result_df.sort_values(by=col, ascending=attr[1])
+
+    return NamedDataFrame(expr['table_alias'], result_df, ndf.origin_name)
 
 
 ## ~~~~~~~~ SET OPERATIONS ~~~~~~~~ ##
@@ -213,7 +232,7 @@ def exec_interestion(expr, df1, df2):
         
     # merge the data frames and keep only the relevant columns
     inter = pd.merge(df1_dr, df2_dr)
-    result_df = inter[df1.columns]
+    result_df = inter[df1.df.columns]
 
     return NamedDataFrame(expr['table_alias'], result_df)
 
@@ -227,7 +246,7 @@ def exec_difference(expr, df1, df2):
     # merge the data frames and keep only the relevant columns/rows
     merged = pd.merge(df1_dr, df2_dr, how="left", indicator=True)
     diff = merged[merged['_merge'] == 'left_only']
-    result_df = diff[df1.columns]
+    result_df = diff[df1.df.columns]
 
     return NamedDataFrame(expr["table_alias"], result_df)
 
