@@ -32,8 +32,8 @@ PROJ_PREFIX: "/projection"i
            | "/pi^d"i
 
 _SEL_PREFIX: "/selection"i
-           | "/sigma"i
            | "/select"i
+           | "/sigma"i
 
 _GROUP_PREFIX: "/group_by"i
              | "/group"i
@@ -73,8 +73,10 @@ INTERSECT_PREFIX: "/intersect"i
 
 DIFFERENCE_PREFIX: "/difference"i
                  | "/diff"i
+                 | "/subtract"i
                  | "/difference^d"i
                  | "/diff^d"i
+                 | "/subtract^d"i
 
 
 // ~~~~~~~~ JOIN OPERATIONS ~~~~~~~~ //
@@ -93,7 +95,7 @@ _CROSS_PREFIX: "/cross_product"i
 
 JOIN_PREFIX: /\/(left_)?semi(_j(oin)?)?/i
            | /\/right_semi(_j(oin)?)?/i
-           | /\/(inner_)?j(oin)?/i
+           | /\/(inner_)?j(oin)?|\/inner/i
            | /\/left(_outer)?(_j(oin)?)?/i
            | /\/right(_outer)?(_j(oin)?)?/i
            | /\/full(_outer)?(_j(oin)?)?|\/outer(_j(oin)?)?/i
