@@ -2,65 +2,78 @@
 
 import pandas as pd
 from .mysql import run_query
-from .utils import clean_exit, print_error, print_debug
+from .utils import clean_exit, print_error, print_warning, print_debug
 from .exceptions import *
 
 saved_results = {}
 
 class NamedDataFrame():
-    def __init__(self, name, df, origin_name=None):
+    def __init__(self, name, df):
         self.name = name
         self.df = df
-        self.origin_name = origin_name
 
     def __repr__(self):
-        return f"NamedDataFrame(name={self.name}, origin_name={self.origin_name}, shape={self.df.shape})"
+        return f"NamedDataFrame(name={self.name}, shape={self.df.shape})"
     
     def __str__(self):
-        return f"NamedDataFrame: {self.name} (origin: {self.origin_name}, shape: {self.df.shape})"
+        return f"NamedDataFrame: {self.name} (shape: {self.df.shape})"
 
 def execute(expr):
-    '''Execute a given relational algebra query and return the table name and table as a DataFrame.'''
+    '''Execute a given relational algebra query and return a NamedDataFrame.'''
 
     operation = None
 
+    print(expr, type(expr))
     try: 
         if not isinstance(expr, dict):
-            raise TypeError("RA expression must be a dictionary representing the query.")
-        if "op_type" not in expr or "operation" not in expr:
-            raise ValueError("RA expression must contain 'op_type' and 'operation' key.")
+            if isinstance(expr, str):
+                # if it is a string, assume it is a table name and load the table
+                return load_table(expr)
+            else:
+                raise TypeError("RA expression must be a dictionary representing the query.")
+        
+        # ensure the expression has an operation type
+        operation = expr.get("operation", None)
+        if operation is None:
+            raise ValueError("RA expression must contain 'operation' key.")
 
-        operation = expr["operation"]
-        df, df2 = get_tables(expr)
+        # recursively get the relevant DataFrame(s)
+        ndf, ndf2 = get_tables(expr)
 
         # execute the operation
         match operation:
+            # unary operations
             case "projection":
-                return exec_projection(expr, df)
+                return exec_projection(expr, ndf)
             case "selection":
-                return exec_selection(expr, df)
+                return exec_selection(expr, ndf)
             case "group":
-                return exec_group(expr, df)
+                return exec_group(expr, ndf)
             case "rename": 
-                return exec_rename(expr, df)
+                return exec_rename(expr, ndf)
             case "remove_duplicates":
-                return exec_remove_duplicates(expr, df)
+                return exec_remove_duplicates(expr, ndf)
             case "sort":
-                return exec_sort(expr, df)
+                return exec_sort(expr, ndf)
+            
+            # set operations
             case "union":
-                return exec_union(expr, df, df2)
+                return exec_union(expr, ndf, ndf2)
             case "intersection":
-                return exec_interestion(expr, df, df2)
+                return exec_interestion(expr, ndf, ndf2)
             case "difference":
-                return exec_difference(expr, df, df2)
+                return exec_difference(expr, ndf, ndf2)
+            
+            # join operations
             case "cross":
-                return exec_cross(expr, df, df2)
+                return exec_cross(expr, ndf, ndf2)
             case "join":
-                return exec_join(expr, df, df2)
+                return exec_join(expr, ndf, ndf2)
             case "divide":
-                return exec_divide(expr, df, df2)
+                return exec_divide(expr, ndf, ndf2)
+            
             case _:
-                raise ValueError(f"Unsupported operation: {expr['operation']}")
+                raise ValueError(f"Operation not supported yet: {expr['operation']}")
             
     except TableNotFoundError as e:
         print_error(f"Table '{e.table_name}' does not exist in the database.", e)
@@ -75,31 +88,38 @@ def execute(expr):
 def get_tables(expr):
     """Ensure the desired table(s) exist depending on the op_type."""
     
-    match expr["op_type"]:
+    op_type = expr.get("op_type", None)
+    if op_type is None:
+        raise ValueError("RA expression must contain 'op_type' key.")
+    
+    match op_type:
         case "unary":
-            df = load_table(expr["table"])
-            return df, None
+            ndf = load_table(expr.get("table"))
+            return ndf, None
         case "set":
-            df = load_table(expr["table1"])
-            df2 = load_table(expr["table2"])
+            ndf = load_table(expr.get("table1"))
+            ndf2 = load_table(expr.get("table2"))
 
-            if not df.df.columns.equals(df2.df.columns):
+            if not ndf.df.columns.equals(ndf2.df.columns):
                 raise ValueError("Set operations require both tables to have the same columns in the same order.")
 
-            return df, df2
+            return ndf, ndf2
         case "join":
-            df = load_table(expr["table1"])
-            df2 = load_table(expr["table2"])
+            ndf = load_table(expr.get("table1"))
+            ndf2 = load_table(expr.get("table2"))
 
-            return df, df2
+            return ndf, ndf2
         case _:
-            raise ValueError(f"Unsupported operation type: {expr['op_type']}")
+            raise ValueError(f"Unsupported operation type: {op_type}")
 
 def load_table(table_name):
     """Return a pandas DataFrame of the desired table from the SQL connection."""
 
+    if table_name is None:  
+        raise TableNotFoundError()
+
     # if the table is a string...
-    if isinstance(table_name, str):   
+    if isinstance(table_name, str):
 
         # check if a saved result  
         if table_name in saved_results:
@@ -118,7 +138,7 @@ def load_table(table_name):
         cols, rows = run_query(query)
         df = pd.DataFrame(rows, columns=cols)
 
-        ndf = NamedDataFrame(table_name, df.copy(), table_name)
+        ndf = NamedDataFrame(table_name, df.copy())
         saved_results[table_name] = ndf
 
         return ndf
@@ -127,7 +147,6 @@ def load_table(table_name):
     else: 
         ndf = (execute(table_name))
         return ndf
-    
 
 ## ~~~~~~~~ UNARY OPERATIONS ~~~~~~~~ ##
 
@@ -144,7 +163,7 @@ def exec_projection(expr, ndf):
     if not keep_dups:
         result_df = result_df.drop_duplicates()
     
-    return NamedDataFrame(expr['table_alias'], result_df, ndf.origin_name)
+    return NamedDataFrame(expr['table_alias'], result_df)
 
 
 def exec_selection(expr, ndf):
@@ -154,9 +173,13 @@ def exec_selection(expr, ndf):
     cond = expr["condition"]
     mask = evaluate_comparison_cond(df, cond)
 
-    return NamedDataFrame(expr['table_alias'], df[mask], ndf.origin_name)
+    if isinstance(mask, bool):
+        # if the condition is a boolean, return the original DataFrame
+        mask = pd.Series(mask, index=df.index)
 
+    return NamedDataFrame(expr['table_alias'], df[mask])
 
+#TODO add aliases for aggregates when nested
 def exec_group(expr, ndf):
     """Execute the given group operation on the given DataFrame."""
 
@@ -183,12 +206,12 @@ def exec_rename(expr, ndf):
     """Rename the table to the given alias."""
     # TODO: check if the table alias already exists
 
-    return NamedDataFrame(expr["table_alias"], ndf.df, expr["table_alias"])
+    return NamedDataFrame(expr["table_alias"], ndf.df)
 
 def exec_remove_duplicates(expr, ndf):
     """Remove duplicates from the given DataFrame."""
 
-    return NamedDataFrame(expr["table_alias"], ndf.df.drop_duplicates(), ndf.origin_name)
+    return NamedDataFrame(expr["table_alias"], ndf.df.drop_duplicates())
 
 def exec_sort(expr, ndf):
     """Sort the DataFrame based on the given attributes."""
@@ -204,7 +227,7 @@ def exec_sort(expr, ndf):
         
         result_df = result_df.sort_values(by=col, ascending=attr[1])
 
-    return NamedDataFrame(expr['table_alias'], result_df, ndf.origin_name)
+    return NamedDataFrame(expr['table_alias'], result_df)
 
 
 ## ~~~~~~~~ SET OPERATIONS ~~~~~~~~ ##
@@ -280,36 +303,139 @@ def exec_cross(expr, df1, df2):
 
     return NamedDataFrame(expr["table_alias"], result_df)
 
-# TODO: finish implementing semi joins and polish 
-def exec_join(expr, df1, df2):
+def exec_join(expr, ndf1, ndf2):
     """Execute the given join operation on the given DataFrames."""
 
     join_type = expr["join_type"]
     condition = expr.get("condition")
     attributes = expr.get("attributes")
 
-    df1_name = df1.origin_name
-    df2_name = df2.origin_name
+    # add helper ids to the DataFrames
+    df1_dr = ndf1.df.reset_index().rename(columns={'index': '_left_id'})
+    df2_dr = ndf2.df.reset_index().rename(columns={'index': '_right_id'})
+    orig_cols = df1_dr.columns.tolist() + df2_dr.columns.tolist()
+
+    try:
+        # if no condition is specified, use a cross join, otherwise use the specified join
+        merge_how = (
+            'cross' if condition else ('inner' if 'semi' in join_type else join_type)
+        )
+        merge = pd.merge(
+            df1_dr, df2_dr, how=merge_how, on=attributes, suffixes=('_L', '_R')
+        )
+    except KeyError as e:
+        raise InvalidColumnName(e.args[0])
+
+    # get the columns that are from the left and the right dataframes after the join
+    left_cols = [c for c in merge.columns if (c in df1_dr.columns or c.endswith('_L'))]
+    right_cols = [c for c in merge.columns if (c in df2_dr.columns or c.endswith('_R'))]
+
+    # if no condition is specified, merge is the result of panda's specialized merge
+    if not condition:
+        result_df = handle_output_cols(merge, join_type, left_cols, right_cols, orig_cols)
+        return clean_join_result(expr, result_df)
+    
+    # if a condition is specified, mask the crossed DataFrame
+    mask = evaluate_comparison_cond(merge, condition)
+    if isinstance(mask, bool):
+        # if the condition is a boolean, return the original DataFrame
+        mask = pd.Series(condition, index=merge.index)
+
+    masked = merge[mask]
+
+    checked_dups = handle_output_cols(masked, join_type, left_cols, right_cols, orig_cols)
 
     if "semi" in join_type:
-        raise ValueError("semi not supported yet")
-
-    if condition is None:
-        result_df = pd.merge(df1.df, df2.df, how=join_type, on=attributes, suffixes=(f'_{df1_name}', f'_{df2_name}'))
-
+        return clean_join_result(expr, checked_dups)
+    elif "inner" in join_type:
+        return clean_join_result(expr, masked)
     else:
-        cross = pd.merge(df1.df, df2.df, how="cross", suffixes=(f'_{df1_name}', f'_{df2_name}'))
-        mask = evaluate_comparison_cond(cross, condition)
+        outer_result =  handle_outer_join(masked, merge, join_type, left_cols, right_cols)
+        return clean_join_result(expr, outer_result)
 
-        result_df = cross[mask]
+def handle_output_cols(merge, join_type, left_cols, right_cols, original_cols):
+    """Handle duplicate columns of merged df."""
+
+    # if a semi-join, only keep the left or right columns
+    if "semi" in join_type:
+        if "left" in join_type:
+            result_df = (
+                merge[left_cols].rename(columns=lambda x: x.replace('_L', ''))
+                    .drop_duplicates('_left_id')
+            )
+        else:
+            result_df = (
+                merge[right_cols].rename(columns=lambda x: x.replace('_R', ''))
+                    .drop_duplicates('_right_id')
+            )
+    else:
+        # print a warning if the output has duplicate columns
+        if set(merge.columns) != set(original_cols):
+            print_warning("Duplicate columns found in join. Can cause unexpected results. Please ensure unique column names across tables.", "JoinWarning")
+        result_df = merge
+
+    return result_df
+
+def handle_outer_join(masked, merge, join_type, left_cols, right_cols):
+    """Handle outer join output. Fill unmatched rows with NaN."""
+
+    # get the original rows that matched at least once
+    matched_left = set(masked['_left_id'])
+    matched_right = set(masked['_right_id'])
+
+    # get the rows that do not have a match from the left and right DataFrames
+    left_only = (
+        merge.loc[~merge['_left_id'].isin(matched_left), left_cols]
+            .drop_duplicates('_left_id')
+            .copy()
+    )
+    right_only = (
+        merge.loc[~merge['_right_id'].isin(matched_right), right_cols]
+            .drop_duplicates('_right_id')
+            .copy()
+    )
+
+    # fill the unmatched rows with NaN values for the other side
+    for rc in right_cols:
+        left_only[rc] = pd.NA
+
+    for lc in left_cols:
+        right_only[lc] = pd.NA
+
+    if "left" in join_type:
+        parts = [masked, left_only]
+    elif "right" in join_type:
+        parts = [masked, right_only]
+    elif "outer" in join_type:
+        parts = [masked, left_only, right_only]
+
+    # align and combine
+    out = pd.concat(parts, ignore_index=True)
+
+    if "left" in join_type:
+        out = out.sort_values(by='_left_id')
+    elif "right" in join_type:
+        out = out.sort_values(by='_right_id')
+
+    return out
+
+def clean_join_result(expr, result_df):
+    # drop helper ids
+    if '_left_id' in result_df.columns:
+        result_df = result_df.drop(columns=['_left_id'])
+    if '_right_id' in result_df.columns:
+        result_df = result_df.drop(columns=['_right_id'])
+
+    # reset the index
+    result_df.reset_index(drop=True, inplace=True)
 
     return NamedDataFrame(expr["table_alias"], result_df)
 
-def exec_divide(expr, df1, df2):
+def exec_divide(expr, ndf1, ndf2):
     """Execute the given divide operation on the given DataFrames."""
 
-    df1 = df1.df.drop_duplicates()
-    df2 = df2.df.drop_duplicates()
+    df1 = ndf1.df.drop_duplicates()
+    df2 = ndf2.df.drop_duplicates()
 
     # divisor columns and columns separate from the divisors
     divisor_cols = df2.columns.tolist()
@@ -337,7 +463,7 @@ def exec_divide(expr, df1, df2):
 
 ## ~~~~~~~~ TABLES, ATTRIBUTES, & OTHER ~~~~~~~~ ##
 
-def resolve_operand(df, operand):
+def resolve_operand(df, operand, left=True):
     """Resolve a column reference, literal, or math expression into a value or Series."""
 
     try:
@@ -354,17 +480,24 @@ def resolve_operand(df, operand):
 
         # resolve table.attr names
         if isinstance(operand, list):
-            join_name = operand[-1] + "_" + operand[0]
+            join_name = operand[-1] + "_L" if left else operand[-1] + "_R"
             if operand[-1] in df:
                 return df[operand[-1]]
-            elif join_name in df:
+            elif join_name in df:   
                 return df[join_name]
 
-        # if a string wrapped in "", assume a string literal, otherwise col name
+
+        
         if isinstance(operand, str):
+            # if a string wrapped in "", assume a string literal
             if ((operand.startswith('"') and operand.endswith('"')) 
                 or (operand.startswith("'") and operand.endswith("'"))):
                 return operand.strip('"\'')
+            
+            # if a string is a column name, return the column
+            join_name = operand + "_L" if left else operand + "_R"
+            if join_name in df:
+                return df[join_name]
             return df[operand]
 
         # if a number, just return
@@ -376,7 +509,7 @@ def resolve_operand(df, operand):
 def evaluate_math_cond(df, expr):
     """Evaluate a math expression with the given df."""
     left = resolve_operand(df, expr["left"])
-    right = resolve_operand(df, expr["right"])
+    right = resolve_operand(df, expr["right"], left=False)
     op = expr["op"]
 
     if op == "+":
@@ -397,6 +530,10 @@ def evaluate_math_cond(df, expr):
 def evaluate_comparison_cond(df, cond):
     """Recursively evaluate a comparison or logical condition."""
 
+    if isinstance(cond, bool):
+        # if the condition is a boolean, return a mask of the DataFrame
+        return pd.Series(cond, index=df.index)
+    
     # recursive and/or condition
     if cond["op"] in {"AND", "OR"}:
         left_mask = evaluate_comparison_cond(df, cond["left"])
@@ -409,7 +546,7 @@ def evaluate_comparison_cond(df, cond):
 
     # binary comparison operator
     left_val = resolve_operand(df, cond["left"])
-    right_val = resolve_operand(df, cond["right"])
+    right_val = resolve_operand(df, cond["right"], left=False)
     op = cond["op"]
 
     if op == ">":

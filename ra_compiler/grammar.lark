@@ -3,11 +3,12 @@
 
 start: "(" _expr ")"
 
-_expr: unary_ops
-     | set_ops
-     | join_ops
-     | "(" _expr ")"
+_expr: table
+    | unary_ops
+    | set_ops
+    | join_ops
 
+table: CNAME | "(" _expr ")"
 
 // ~~~~~~~~ UNARY OPERATIONS ~~~~~~~~ //
 
@@ -90,37 +91,47 @@ _CROSS_PREFIX: "/cross_product"i
             | "/cross"i
             | "/x"i
 
-JOIN_PREFIX: /\/(inner_)?j(oin)?/i
-            | /\/left(_outer)?(_j(oin)?)?/i
-            | /\/right(_outer)?(_j(oin)?)?/i
-            | /\/full(_outer)?(_j(oin)?)?|\/outer(_j(oin)?)?/i
-            | /\/(left_)?semi(_j(oin)?)?/i
-            | /\/right_semi(_j(oin)?)?/i
+JOIN_PREFIX: /\/(left_)?semi(_j(oin)?)?/i
+           | /\/right_semi(_j(oin)?)?/i
+           | /\/(inner_)?j(oin)?/i
+           | /\/left(_outer)?(_j(oin)?)?/i
+           | /\/right(_outer)?(_j(oin)?)?/i
+           | /\/full(_outer)?(_j(oin)?)?|\/outer(_j(oin)?)?/i
+
 
 _DIVIDE_PREFIX: "/divide"i
               | "/div"i
 
 // ~~~~~~~~ TABLES, ATTRIBUTES, & OTHER ~~~~~~~~ //
 
-table: CNAME | "(" _expr ")"
-
 attributes: attr ("," attr)*
 sort_attributes: sort_attr ("," sort_attr)*
 sort_attr: attr SORT_DIR
 
-?attr: CNAME ("." CNAME)?
-     | math_cond "->" CNAME     // TODO: fix to be communitive
-     | CNAME "->" CNAME
+?attr: math_cond "->" CNAME
+        | _alias_attr
+        | _table_attr
 
-math_cond: attr MATH_OP (attr | NUMBER)  // TODO: fix to be communitive
-        | "(" math_cond ")"
-        
-// TODO: fix to not allow NUMBER COMP_OP NUMBER but still be communitive
-comp_cond: _comp_cond_attr COMP_OP _comp_cond_attr 
-          | "(" comp_cond ")"
-          | comp_cond (AND | OR) comp_cond
+_table_attr: CNAME ("." CNAME)?
+_alias_attr: CNAME "->" CNAME
 
-_comp_cond_attr: (attr | NUMBER | ESCAPED_STRING | math_cond) 
+?math_cond: math_term MATH_OP math_term
+          | "(" math_cond ")"
+
+?math_term: _table_attr
+          | NUMBER
+          | math_cond
+
+comp_cond: TRUTH_VAL 
+         | _comp_cond_attr COMP_OP _comp_cond_attr
+         | "(" comp_cond ")"
+         | comp_cond (AND | OR) comp_cond
+
+_comp_cond_attr: attr
+               | NUMBER
+               | ESCAPED_STRING
+               | math_cond
+
 
 aggr_conds: aggr_func ("," aggr_func)*
 aggr_func: AGGR_OP "(" attr ")"
@@ -131,6 +142,7 @@ AGGR_OP: "sum"i | "count"i | "avg"i | "min"i | "max"i
 AND: "and"i | "&&" | "&" 
 OR: "or"i | "||" | "|"
 SORT_DIR: "asc"i | "desc"i
+TRUTH_VAL: "true"i | "false"i | "t"i | "f"i
 
 %import common.ESCAPED_STRING
 %import common.CNAME

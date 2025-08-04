@@ -16,6 +16,16 @@ def print_error(err_msg="", e="RACError"):
     print(traceback.format_exc())
     return
 
+def print_warning(warn_msg="", e="RACWarning"):
+    '''Print the given warning message.'''
+    if isinstance(e, str):
+        etype = e
+    else:
+        etype = type(e).__name__
+
+    print(f"(RAC-WARN) [{etype}] {warn_msg}", file=sys.stderr)
+    return
+
 def print_debug(debug_msg=""):
     '''Print a the given debug message.'''
     global debug_counter

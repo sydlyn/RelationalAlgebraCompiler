@@ -15,7 +15,8 @@ try:
     with open(GRAMMAR_PATH) as f:
         grammar_text = f.read()
         
-    lark_parser = Lark(grammar_text, parser='lalr')
+    # lark_parser = Lark(grammar_text, parser='lalr') #TODO: change to utilize LALR parser
+    lark_parser = Lark(grammar_text, parser='earley', ambiguity='explicit')
 
 except FileNotFoundError:
     print(f"Grammar file '{GRAMMAR_FILE}' not found at {PROJ_DIR}/. Please check the path.", file=sys.stderr)
@@ -71,9 +72,8 @@ def handle_unexpected_token(query, error):
 
         # print("~~~~~~~~~~~~~~ UNEXPECTED TOKEN ~~~~~~~~~~~~~~~")
 
-        print(f"### Error Parsing Query ###")
-
-
+        # print(f"### Error Parsing Query ###")
+        print_error(f"Error Parsing Query:", "ParseError")
 
         # get the tokens that are allowed at the error position
         allowed = error.accepts or error.expected

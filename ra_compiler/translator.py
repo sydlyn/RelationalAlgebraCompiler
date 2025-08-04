@@ -255,6 +255,14 @@ class RATranslator(Transformer):
     def SORT_DIR(self, token):
         return token.value.upper() == "ASC"
     
+    def TRUTH_VAL(self, token):
+        if token.value.lower() in ["true", "t"]:
+            return True
+        elif token.value.lower() in ["false", "f"]:
+            return False
+        else:
+            raise ValueError(f"Invalid truth value: {token.value}")
+    
     def CNAME(self, token):
         return token.value
     
