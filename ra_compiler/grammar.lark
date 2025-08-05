@@ -24,7 +24,7 @@ selection: _SEL_PREFIX "{" comp_cond "}" table
 group: _GROUP_PREFIX "{" attributes ";" aggr_conds "}" table
 rename: _RENAME_PREFIX "{" CNAME "}" table
 remove_duplicates: _REMOVE_DUPLICATES_PREFIX table
-sort: _SORT_PREFIX "{" sort_attributes"}" table  
+sort: _SORT_PREFIX "{" sort_attributes "}" table  
 
 PROJ_PREFIX: "/projection"i
            | "/projection^d"i
@@ -93,12 +93,47 @@ _CROSS_PREFIX: "/cross_product"i
             | "/cross"i
             | "/x"i
 
-JOIN_PREFIX: /\/(left_)?semi(_j(oin)?)?/i
-           | /\/right_semi(_j(oin)?)?/i
-           | /\/(inner_)?j(oin)?|\/inner/i
-           | /\/left(_outer)?(_j(oin)?)?/i
-           | /\/right(_outer)?(_j(oin)?)?/i
-           | /\/full(_outer)?(_j(oin)?)?|\/outer(_j(oin)?)?/i
+// JOIN_PREFIX: /\/(left_)?semi(_j(oin)?)?/i
+//            | /\/right_semi(_j(oin)?)?/i
+//            | /\/(inner_)?j(oin)?|\/inner/i
+//            | /\/left(_outer)?(_j(oin)?)?/i
+//            | /\/right(_outer)?(_j(oin)?)?/i
+//            | /\/full(_outer)?(_j(oin)?)?|\/outer(_j(oin)?)?/i
+
+JOIN_PREFIX: "/left_semi_join"i
+           | "/left_semi_j"i
+           | "/left_semi"i
+           | "/semi_join"i
+           | "/semi_j"i
+           | "/semi"i
+           | "/right_semi_join"i
+           | "/right_semi_j"i
+           | "/right_semi"i
+           | "/inner_join"i
+           | "/inner_j"i
+           | "/inner"i
+           | "/left_outer_join"i
+           | "/left_outer_j"i
+           | "/left_outer"i
+           | "/left_join"i
+           | "/left_j"i
+           | "/left"i
+           | "/right_outer_join"i
+           | "/right_outer_j"i
+           | "/right_outer"i
+           | "/right_join"i
+           | "/right_j"i
+           | "/right"i
+           | "/full_outer_join"i
+           | "/full_outer_j"i
+           | "/full_outer"i
+           | "/full_join"i
+           | "/full_j"i
+           | "/full"i
+           | "/outer_join"i
+           | "/outer_j"i
+           | "/outer"i
+
 
 
 _DIVIDE_PREFIX: "/divide"i

@@ -225,7 +225,7 @@ def exec_sort(expr, ndf):
         if col not in df.columns:
             raise InvalidColumnName(col)
         
-        result_df = result_df.sort_values(by=col, ascending=attr[1])
+        result_df = df.sort_values(by=col, ascending=attr[1])
 
     return NamedDataFrame(expr['table_alias'], result_df)
 
