@@ -17,17 +17,19 @@ class NamedDataFrame():
     
     def __str__(self):
         return f"NamedDataFrame: {self.name} (shape: {self.df.shape})"
+    
+    def copy(self):
+        return NamedDataFrame(self.name, self.df.copy())
 
 def execute(expr):
     '''Execute a given relational algebra query and return a NamedDataFrame.'''
 
     operation = None
 
-    print(expr, type(expr))
     try: 
         if not isinstance(expr, dict):
+            # if it is a string, assume it is a table name and load the table
             if isinstance(expr, str):
-                # if it is a string, assume it is a table name and load the table
                 return load_table(expr)
             else:
                 raise TypeError("RA expression must be a dictionary representing the query.")
@@ -123,7 +125,7 @@ def load_table(table_name):
 
         # check if a saved result  
         if table_name in saved_results:
-            return saved_results[table_name]
+            return saved_results[table_name].copy()
          
         # or check if it is a table from SQL connection
         check_query = f"SHOW TABLES LIKE '{table_name}'"
@@ -136,12 +138,18 @@ def load_table(table_name):
         # if the table exists, load and save it
         query = f"SELECT * FROM `{table_name}`"
         cols, rows = run_query(query)
-        df = pd.DataFrame(rows, columns=cols)
 
-        ndf = NamedDataFrame(table_name, df.copy())
+        # set all NULL values to pd.NA
+        cleaned_rows = []
+        for row in rows:
+            cleaned_rows += [[pd.NA if x is None else x for x in row]]
+
+        df = pd.DataFrame(cleaned_rows, columns=cols)
+
+        ndf = NamedDataFrame(table_name, df)
         saved_results[table_name] = ndf
 
-        return ndf
+        return ndf.copy()
     
     # otherwise, execute the nested operation
     else: 
@@ -165,7 +173,6 @@ def exec_projection(expr, ndf):
     
     return NamedDataFrame(expr['table_alias'], result_df)
 
-
 def exec_selection(expr, ndf):
     """Execute the given selection operation on the given DataFrame."""
     
@@ -185,22 +192,45 @@ def exec_group(expr, ndf):
 
     df = ndf.df
     group_attrs = process_attributes(df, expr["attributes"])
-    aggr_funcs = parse_aggr_conds(expr["aggr_cond"])
+    aggr_funcs = parse_aggr_conds(expr["aggr_cond"], df)
 
     group_df = df.groupby(group_attrs, sort=False)
 
-    # Construct aggregation mapping for pandas
+
+    # construct aggregation mapping for pandas
     agg_dict = {}
     for alias, (col, func) in aggr_funcs.items():
-        if col == "*":
-            # Special case for count(*): use .size()
-            agg_dict[alias] = ("", "size")
+
+        # when count by *, return how many rows are in each group
+        if func == "count" and col == "*":
+            temp_col = "__count_star_temp"
+            df[temp_col] = 1
+            agg_dict[alias] = pd.NamedAgg(column=temp_col, aggfunc=func)
+
+        elif func == "count":
+            # mask = ~pd.concat([df[c].isna() for c in col], axis=1).all(axis=1) # count when EITHER is not null
+            mask = ~pd.concat([df[c].isna() for c in col], axis=1).any(axis=1) # count when BOTH is not null
+
+            temp_col = f"__mask_{alias}"
+            df[temp_col] = mask.astype(int)
+
+            group_df = df.groupby(group_attrs, sort=False)
+            agg_dict[alias] = pd.NamedAgg(column=temp_col, aggfunc="sum")
+
         else:
-            agg_dict[alias] = pd.NamedAgg(column=col, aggfunc=func)
+            if func == "sum":
+                agg_func = lambda x: x.sum() if x.notna().any() else pd.NA
+            elif func == "mean":
+                agg_func = lambda x: x.mean() if x.notna().any() else pd.NA
+            elif func == "min":
+                agg_func = lambda x: x.min() if x.notna().any() else pd.NA
+            elif func == "max":
+                agg_func = lambda x: x.max() if x.notna().any() else pd.NA
+
+            agg_dict[alias] = pd.NamedAgg(column=col, aggfunc=agg_func)
 
     result_df = group_df.agg(**agg_dict).reset_index()
     return NamedDataFrame(expr['table_alias'], result_df)
-
 
 def exec_rename(expr, ndf):
     """Rename the table to the given alias."""
@@ -219,7 +249,7 @@ def exec_sort(expr, ndf):
     df = ndf.df
     sort_attrs = expr["sort_attributes"]
 
-    for attr in sort_attrs:
+    for attr in reversed(sort_attrs):
         # ensure the attribute is a valid column in the DataFrame
         col = attr[0]
         if col not in df.columns:
@@ -246,7 +276,6 @@ def exec_union(expr, df1, df2):
 
     return NamedDataFrame(expr['table_alias'], result_df)
         
-
 def exec_interestion(expr, df1, df2):
     """Execute the given intersection operation on the given DataFrames."""
 
@@ -258,7 +287,6 @@ def exec_interestion(expr, df1, df2):
     result_df = inter[df1.df.columns]
 
     return NamedDataFrame(expr['table_alias'], result_df)
-
 
 def exec_difference(expr, df1, df2):
     """Execute the given difference operation on the given DataFrames."""
@@ -272,7 +300,6 @@ def exec_difference(expr, df1, df2):
     result_df = diff[df1.df.columns]
 
     return NamedDataFrame(expr["table_alias"], result_df)
-
 
 def prepare_for_set_op(df1, df2, keep_dups=False):
     """Prepares two DataFrames for set operations by either dropping duplicates or adding row counts (for bag semantics)."""
@@ -294,12 +321,13 @@ def prepare_for_set_op(df1, df2, keep_dups=False):
     
     return df1_clean, df2_clean
 
+
 ## ~~~~~~~~ JOIN OPERATIONS ~~~~~~~~ ##
 
 def exec_cross(expr, df1, df2):
     """Execute the given cross operation on the given DataFrames."""
 
-    result_df = pd.merge(df1.df, df2.df, how="cross")
+    result_df = pd.merge(df1.df, df2.df, how="cross", suffixes=('_L', '_R'))
 
     return NamedDataFrame(expr["table_alias"], result_df)
 
@@ -461,6 +489,7 @@ def exec_divide(expr, ndf1, ndf2):
 
     return NamedDataFrame(expr["table_alias"], result_df)
 
+
 ## ~~~~~~~~ TABLES, ATTRIBUTES, & OTHER ~~~~~~~~ ##
 
 def resolve_operand(df, operand, left=True):
@@ -530,8 +559,8 @@ def evaluate_math_cond(df, expr):
 def evaluate_comparison_cond(df, cond):
     """Recursively evaluate a comparison or logical condition."""
 
+    # if the condition is a boolean, return a full/empty mask
     if isinstance(cond, bool):
-        # if the condition is a boolean, return a mask of the DataFrame
         return pd.Series(cond, index=df.index)
     
     # recursive and/or condition
@@ -549,20 +578,34 @@ def evaluate_comparison_cond(df, cond):
     right_val = resolve_operand(df, cond["right"], left=False)
     op = cond["op"]
 
+    if not isinstance(left_val, pd.Series):
+        left_val = pd.Series([left_val] * len(df), index=df.index)
+    if not isinstance(right_val, pd.Series):
+        right_val = pd.Series([right_val] * len(df), index=df.index)
+
+    # get which rows have NA's
+    na_mask = left_val.isna() | right_val.isna()
+    non_na_idx = ~na_mask
+
+    # default rows with NA's to False
+    result = pd.Series(False, index=df.index)
+
     if op == ">":
-        return left_val > right_val
+        result[non_na_idx] = left_val[non_na_idx] > right_val[non_na_idx]
     elif op == "<":
-        return left_val < right_val
+        result[non_na_idx] = left_val[non_na_idx] < right_val[non_na_idx]
     elif op in {"=", "=="}:
-        return left_val == right_val
+        result[non_na_idx] = left_val[non_na_idx] == right_val[non_na_idx]
     elif op == ">=":
-        return left_val >= right_val
+        result[non_na_idx] = left_val[non_na_idx] >= right_val[non_na_idx]
     elif op == "<=":
-        return left_val <= right_val
+        result[non_na_idx] = left_val[non_na_idx] <= right_val[non_na_idx]
     elif op == "!=":
-        return left_val != right_val
+        result[non_na_idx] = left_val[non_na_idx] != right_val[non_na_idx]
     else:
         raise ValueError(f"Unsupported comparison operator: {op}")
+
+    return result
 
 def process_attributes(df, attributes_expr):
     """
@@ -588,37 +631,36 @@ def process_attributes(df, attributes_expr):
             # handle a dotted column name
             processed_attrs.append(attr[-1])
         else:
-            processed_attrs.append(attr)
+            if attr == "*":
+                # if the attribute is *, return all columns
+                processed_attrs = df.columns.tolist()
+            else:
+                # otherwise, just add the column name
+                processed_attrs.append(attr)
 
     return processed_attrs
 
-def parse_aggr_conds(aggr_conds):
-    """
-    Convert aggr_cond expressions into a dict of output_column -> (col, agg_func),
-    e.g., {"sum_salary": ("salary", "sum")}
-    """
+def parse_aggr_conds(aggr_conds, df):
+    """Convert aggr_cond expressions into a dict of output_column -> (col, agg_func)"""
     aggr_funcs = {}
-    AGGR_OP_MAP = {
-        "sum": "sum",
-        "count": "count",
-        "avg": "mean",
-        "min": "min",
-        "max": "max"
-    }
-
     for aggr in aggr_conds:
+        # grab the alias if given one
+        if isinstance(aggr, list):
+            alias = aggr[1]
+            aggr = aggr[0]
+        else:
+            alias = None
+    
         op = aggr["aggr"].lower()
-        attr = aggr["attr"]
-        col = attr[-1] if isinstance(attr, list) else attr
+        attr = aggr.get("attr", "*")
+        attrs = process_attributes(df, attr)
 
         # Special handling for count(*)
-        if op == "count" and col == "*":
-            alias = "count_star"
-            aggr_funcs[alias] = ("*", "size")  # pandas .size() handles count(*)
+        if op == "count" and attr == ["*"]:
+            alias = alias if alias else "count_star"
+            aggr_funcs[alias] = ("*", "size")
         else:
-            if op not in AGGR_OP_MAP:
-                raise ValueError(f"Unsupported aggregation operator: {op}")
-            alias = f"{op}_{col}"
-            aggr_funcs[alias] = (col, AGGR_OP_MAP[op])
+            alias = alias if alias else f"{op}_{'_'.join(attrs)}"
+            aggr_funcs[alias] = (attr, op)
 
     return aggr_funcs

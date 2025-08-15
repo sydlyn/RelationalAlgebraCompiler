@@ -1,14 +1,14 @@
 // ra_compiler/grammar.lark
-// defines the grammar for the relational algebra compiler as described in [doc file] <- TODO
+// defines the grammar for the relational algebra compiler as described in grammar_syntax.md
 
-start: "(" _expr ")"
+start: _expr
 
 _expr: table
     | unary_ops
     | set_ops
     | join_ops
 
-table: CNAME | "(" _expr ")"
+table: CNAME | "(" _expr ")" | table "->" CNAME
 
 // ~~~~~~~~ UNARY OPERATIONS ~~~~~~~~ //
 
@@ -93,13 +93,6 @@ _CROSS_PREFIX: "/cross_product"i
             | "/cross"i
             | "/x"i
 
-// JOIN_PREFIX: /\/(left_)?semi(_j(oin)?)?/i
-//            | /\/right_semi(_j(oin)?)?/i
-//            | /\/(inner_)?j(oin)?|\/inner/i
-//            | /\/left(_outer)?(_j(oin)?)?/i
-//            | /\/right(_outer)?(_j(oin)?)?/i
-//            | /\/full(_outer)?(_j(oin)?)?|\/outer(_j(oin)?)?/i
-
 JOIN_PREFIX: "/left_semi_join"i
            | "/left_semi_j"i
            | "/left_semi"i
@@ -112,6 +105,8 @@ JOIN_PREFIX: "/left_semi_join"i
            | "/inner_join"i
            | "/inner_j"i
            | "/inner"i
+           | "/join"i
+           | "/j"i
            | "/left_outer_join"i
            | "/left_outer_j"i
            | "/left_outer"i
@@ -142,9 +137,11 @@ _DIVIDE_PREFIX: "/divide"i
 // ~~~~~~~~ TABLES, ATTRIBUTES, & OTHER ~~~~~~~~ //
 
 attributes: attr ("," attr)*
+          | ALL_ATTR
 sort_attributes: sort_attr ("," sort_attr)*
 sort_attr: attr SORT_DIR
 
+// TODO: clean error message for when math)cond doesn't have alias names
 ?attr: math_cond "->" CNAME
         | _alias_attr
         | _table_attr
@@ -153,35 +150,44 @@ _table_attr: CNAME ("." CNAME)?
 _alias_attr: CNAME "->" CNAME
 
 ?math_cond: math_term MATH_OP math_term
+        //   | math_cond MATH_OP math_term
           | "(" math_cond ")"
+        //   | math_term
+          // TODO: test to make sure ^ wont break if 2->col2?
 
 ?math_term: _table_attr
           | NUMBER
-          | math_cond
+          | math_cond // ?
 
 comp_cond: TRUTH_VAL 
-         | _comp_cond_attr COMP_OP _comp_cond_attr
+         | _comp_term COMP_OP _comp_term
          | "(" comp_cond ")"
          | comp_cond (AND | OR) comp_cond
 
-_comp_cond_attr: attr
-               | NUMBER
-               | ESCAPED_STRING
-               | math_cond
+_comp_term: attr
+          | NUMBER
+          | STRING
+          | math_cond
 
 
-aggr_conds: aggr_func ("," aggr_func)*
+aggr_conds: aggr_term ("," aggr_term)*
+aggr_term: aggr_func ("->" CNAME)?
 aggr_func: AGGR_OP "(" attr ")"
+         | COUNT_OP "(" attributes ")"
 
+ALL_ATTR: "*"
 MATH_OP: "+" | "-" | "*" | "/" | "%" | "^"
 COMP_OP: ">" | "<" | ">=" | "<=" | "!=" | "==" | "="
-AGGR_OP: "sum"i | "count"i | "avg"i | "min"i | "max"i
+AGGR_OP: "sum"i | "avg"i | "min"i | "max"i | "mean"i
+COUNT_OP: "count"i
 AND: "and"i | "&&" | "&" 
 OR: "or"i | "||" | "|"
 SORT_DIR: "asc"i | "desc"i
 TRUTH_VAL: "true"i | "false"i | "t"i | "f"i
+STRING: ESCAPED_STRING | "'" _STRING_ESC_INNER "'"
 
 %import common.ESCAPED_STRING
+%import common._STRING_ESC_INNER
 %import common.CNAME
 %import common.NUMBER
 %import common.WS

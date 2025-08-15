@@ -12,7 +12,7 @@ def print_error(err_msg="", e="RACError"):
     else:
         etype = type(e).__name__
 
-    print(f"(RAC-ERR) [{etype}] {err_msg}", file=sys.stderr)
+    print(f"\n(RAC-ERR) [{etype}] {err_msg}", file=sys.stderr)
     print(traceback.format_exc())
     return
 

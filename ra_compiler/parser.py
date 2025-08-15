@@ -36,6 +36,8 @@ def parse_query(query):
         if not isinstance(query, str):
             print(f"Invalid query type: {type(query)}. Expected a string.")
             return None
+        
+        query = clean_query(query)
     
         parsed = lark_parser.parse(query)
 
@@ -43,11 +45,25 @@ def parse_query(query):
 
     except lark.exceptions.UnexpectedToken as e:
         handle_unexpected_token(query, e)
-    except lark.exceptions.UnexpectedCharacters as e:
-        print_error(f"Unrecognized character found in query: {e.char}", e)
+    except lark.exceptions.UnexpectedInput as e:
+        print_error(f"{e}", e)
     except Exception as e:
         print_error(f"An error occurred during parsing: {e}", e)
         clean_exit(1)
+
+def clean_query(query):
+    """Clean the input query to ensure it is ready to be parsed."""
+    
+    # remove leading/trailing whitespace and end line characters
+    query = query.strip().strip(",;")
+
+    # remove subscript underscores
+    query = query.replace("_{", "{")
+
+    # replace any backward slahsed keywords with forward slashes
+    query = query.replace("\\", "/")
+    
+    return query
 
 # print helpful error messages based on the type of unexpected token encountered
 def handle_unexpected_token(query, error):

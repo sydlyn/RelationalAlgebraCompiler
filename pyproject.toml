@@ -26,3 +26,4 @@ where = ["."]
 
 [project.scripts]
 rac = "ra_compiler.cli:main"
+racTest = "tests.run_tests:main"

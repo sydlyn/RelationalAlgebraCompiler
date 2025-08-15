@@ -51,7 +51,8 @@ def run():
 
             print("Execution Result:")
             print(result.name)
-            print(result.df)
+            print(result.df.to_string(index=False))
+            #TODO: make a helper to print without index?
                         
             query_counter += 1
 
@@ -67,17 +68,21 @@ def run():
 def handle_query(query, query_count=0):
     """Parse, translate, and execute a single query input."""
 
+    print_debug(f"Handling query: {query}")
+
     parsed_query = parse_query(query)
     if parsed_query is None:
         return None
     # FOR TESTING: print the parsed query : Lark Tree
-    print("Parsed Query: ", parsed_query.pretty())
+    pretty_parsed = parsed_query.pretty()
+    print_debug(f"Parsed Query: {pretty_parsed}")
       
     # translate the parsed query into an intermediate representation
     translation = None
     try:
         translation = RATranslator(query_count).transform(parsed_query)
-        print(f"Translation: {translation}")
+        # FOR TESTING:
+        print_debug(f"Translation: {translation}")
     except Exception as e:
         print_error(f"An error occurred during translation: {e}", "TranslationError")
         return None
@@ -87,5 +92,7 @@ def handle_query(query, query_count=0):
     if result is None:
         return None
 
+    # reset the index then save the result
+    result.df = result.df.reset_index(drop=True)
     saved_results[result.name] = result
     return result

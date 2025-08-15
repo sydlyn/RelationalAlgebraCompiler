@@ -181,7 +181,16 @@ class RATranslator(Transformer):
     ## ~~~~~~~~ TABLES, ATTRIBUTES, & OTHER ~~~~~~~~ ##
 
     def table(self, items):
-        return items[0]
+        if len(items) == 1:
+            return items[0]
+        else:
+            if isinstance(items[0], dict):
+                return items[0] | {
+                    "table_alias": items[1]
+                    }
+            else:
+                return self.unary_ops(self.rename(reversed(items)))
+
 
     def attributes(self, attrs):
         return attrs
@@ -228,15 +237,34 @@ class RATranslator(Transformer):
     
     def aggr_conds(self, items):
         return items
-    
-    def aggr_func(self, items):
+
+    def aggr_term(self, items):
         if len(items) == 1:
-            return {"aggr": items[0]}
+            return items[0]
         elif len(items) == 2:
-            return {"aggr": items[0], "attr": items[1]}
+            return [items[0], items[1]]
         else:
             raise ValueError("Invalid aggregation condition format")
-        
+    
+    def aggr_func(self, items):
+        aggr_op, attrs = items
+
+        AGGR_OP_MAP = {
+            "sum": "sum",
+            "count": "count",
+            "avg": "mean",
+            "mean": "mean",
+            "min": "min",
+            "max": "max"
+        }
+        if aggr_op not in AGGR_OP_MAP:
+            raise ValueError(f"Unsupported aggregation operator: {aggr_op}")
+       
+        return {"aggr": AGGR_OP_MAP[aggr_op], "attr": attrs}
+
+    def ALL_ATTR(self, _):
+        return "*"
+
     def MATH_OP(self, token):
         return token.value
     
@@ -244,6 +272,9 @@ class RATranslator(Transformer):
         return token.value
     
     def AGGR_OP(self, token):
+        return token.value
+
+    def COUNT_OP(self, token):
         return token.value
     
     def AND(self, _):
@@ -271,3 +302,6 @@ class RATranslator(Transformer):
     
     def ESCAPED_STRING(self, token):
         return token.value
+    
+    def _ambig(self, options):
+        return options[0]  # pick the first ambiguous option
