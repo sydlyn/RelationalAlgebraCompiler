@@ -207,14 +207,14 @@ def exec_group(expr, ndf):
     for alias, (col, func) in aggr_funcs.items():
 
         # when count by *, return how many rows are in each group
-        if func == "count" and col == "*":
+        if func == "size" and col == "*":
             temp_col = "__count_star_temp"
             df[temp_col] = 1
             agg_dict[alias] = pd.NamedAgg(column=temp_col, aggfunc=func)
 
         elif func == "count":
-            # mask = ~pd.concat([df[c].isna() for c in col], axis=1).all(axis=1) # count when EITHER is not null
-            mask = ~pd.concat([df[c].isna() for c in col], axis=1).any(axis=1) # count when BOTH is not null
+            mask = ~pd.concat([df[c].isna() for c in col], axis=1).all(axis=1) # count when EITHER is not null
+            # mask = ~pd.concat([df[c].isna() for c in col], axis=1).any(axis=1) # count when BOTH is not null
 
             temp_col = f"__mask_{alias}"
             df[temp_col] = mask.astype(int)
