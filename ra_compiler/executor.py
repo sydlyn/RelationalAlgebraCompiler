@@ -128,11 +128,7 @@ def load_table(table_name):
             return saved_results[table_name].copy()
          
         # or check if it is a table from SQL connection
-        check_query = f"SHOW TABLES LIKE '{table_name}'"
-        result = run_query(check_query)
-        
-        # if the table does not exist, error
-        if len(result[1]) == 0:
+        if not check_sql_for_table(table_name):
             raise TableNotFoundError(table_name)
 
         # if the table exists, load and save it
@@ -155,6 +151,17 @@ def load_table(table_name):
     else: 
         ndf = (execute(table_name))
         return ndf
+    
+def check_sql_for_table(table_name):
+    """Return True if the given table name is in the connected sql database."""
+
+    check_query = f"SHOW TABLES LIKE '{table_name}'"
+    result = run_query(check_query)
+    
+    if len(result[1]) == 0:
+        return False
+
+    return True
 
 ## ~~~~~~~~ UNARY OPERATIONS ~~~~~~~~ ##
 
@@ -186,7 +193,6 @@ def exec_selection(expr, ndf):
 
     return NamedDataFrame(expr['table_alias'], df[mask])
 
-#TODO add aliases for aggregates when nested
 def exec_group(expr, ndf):
     """Execute the given group operation on the given DataFrame."""
 
@@ -195,7 +201,6 @@ def exec_group(expr, ndf):
     aggr_funcs = parse_aggr_conds(expr["aggr_cond"], df)
 
     group_df = df.groupby(group_attrs, sort=False)
-
 
     # construct aggregation mapping for pandas
     agg_dict = {}
@@ -234,9 +239,14 @@ def exec_group(expr, ndf):
 
 def exec_rename(expr, ndf):
     """Rename the table to the given alias."""
-    # TODO: check if the table alias already exists
 
-    return NamedDataFrame(expr["table_alias"], ndf.df)
+    alias = expr.get("table_alias")
+    
+    # check if the alias is in the sql database or is a saved table
+    if check_sql_for_table(alias) or alias in saved_results:
+        raise TableAlreadyExists(alias)
+
+    return NamedDataFrame(alias, ndf.df)
 
 def exec_remove_duplicates(expr, ndf):
     """Remove duplicates from the given DataFrame."""
@@ -504,6 +514,10 @@ def resolve_operand(df, operand, left=True):
                 return evaluate_math_cond(df, operand)
             elif t == "comp_cond":
                 return evaluate_comparison_cond(df, operand)
+            elif t == "alias":
+                alias = operand["alias"]
+                df[alias] = resolve_operand(df, operand["attr"])
+                return df[alias]
             else:
                 raise ValueError(f"Unknown operand type: {t}")
 
@@ -514,8 +528,6 @@ def resolve_operand(df, operand, left=True):
                 return df[operand[-1]]
             elif join_name in df:   
                 return df[join_name]
-
-
         
         if isinstance(operand, str):
             # if a string wrapped in "", assume a string literal
@@ -625,7 +637,10 @@ def process_attributes(df, attributes_expr):
         if isinstance(attr, dict):
             # compute an aliased column
             alias = attr["alias"]
-            df[alias] = evaluate_math_cond(df, attr["cond"])
+            if "cond" in attr:
+                df[alias] = evaluate_math_cond(df, attr["cond"])
+            elif "attr" in attr:
+                df[alias] = resolve_operand(df, attr["attr"])
             processed_attrs.append(alias)
         elif isinstance(attr, list):
             # handle a dotted column name

@@ -138,8 +138,8 @@ class TestHandleQuery(unittest.TestCase):
         self.assertGreater(len(df), 0)
 
     def test_left_join_reverse(self):
-        cli.handle_query("(/rho {t2b} (/pi {b} T))")
-        df = self._run_and_check("(t2b /left R)", ["b"])
+        cli.handle_query("(/rho {t2b2} (/pi {b} T))")
+        df = self._run_and_check("(t2b2 /left R)", ["b"])
         self.assertGreater(len(df), 0)
 
     def test_delta_rho(self):

@@ -189,7 +189,7 @@ class RATranslator(Transformer):
                     "table_alias": items[1]
                     }
             else:
-                return self.unary_ops(self.rename(reversed(items)))
+                return self.unary_ops([self.rename(reversed(items))])
 
 
     def attributes(self, attrs):
@@ -200,13 +200,20 @@ class RATranslator(Transformer):
             
     #TODO: implemet b->b_new
     def attr(self, items):
-        if isinstance(items[0], (dict)):
+        if isinstance(items[0], dict):
             return {
                 'alias': str(items[1]),
                 'cond': items[0]
             }
         else:
             return items
+    
+    def alias_attr(self, items):
+        return {
+            'type': 'alias',
+            'attr': items[0],
+            'alias': str(items[1])
+        }
         
     def sort_attr(self, items):
         return (items[0], items[1])

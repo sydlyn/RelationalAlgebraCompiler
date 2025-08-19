@@ -143,11 +143,11 @@ sort_attr: attr SORT_DIR
 
 // TODO: clean error message for when math)cond doesn't have alias names
 ?attr: math_cond "->" CNAME
-        | _alias_attr
+        | alias_attr
         | _table_attr
 
 _table_attr: CNAME ("." CNAME)?
-_alias_attr: CNAME "->" CNAME
+alias_attr: CNAME "->" CNAME
 
 ?math_cond: math_term MATH_OP math_term
         //   | math_cond MATH_OP math_term

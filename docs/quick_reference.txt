@@ -1,0 +1,41 @@
+~~~ RACompiler Quick Reference ~~~
+
+- Projection: select specific columns
+  => \pi {col1[, col2, ...] | *} table
+
+- Selection: filter rows
+  => \sigma {condition} table
+
+- Group By: group rows by specific columns and perform an aggregation
+  => \group {cols; agggregation(col)} table
+
+- Rename: rename a table
+  => \rho {new_name} table
+
+- Remove Duplicates: remove duplicate rows
+  => \delta table
+
+- Sort: sort the rows on specific columns
+  => \sort {col asc/desc, ...} table
+
+- Union: return the rows that are in either table
+  => table1 \union table2
+
+- Intersection: return the rows in both tables
+  => table1 \inter table2
+
+- Difference: return the rows in table1 not in table2
+  => table1 \diff table2
+
+- Cartesian/Cross Product: return all row combinations
+  => table1 \x table2 
+
+- Join: join on common columns or based on a condition
+  - join types: \join, \outer_join, \left_outer, \right_outer, \left_semi, \right_semi
+  => table1 <join_type> [{condition}] table2 
+
+- Division: rows in table1 that relate to each row in table2
+  => table1 \div table2 
+
+See more detailed information about the syntax in the grammar_syntax.md docs
+~~~

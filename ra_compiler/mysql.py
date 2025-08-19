@@ -8,14 +8,13 @@ from .utils import print_error, clean_exit
 conn = None
 cursor = None
 
-def setup_mysql():
+def setup_mysql(config_file=".env"):
     """Initialize the MySQL connection and cursor."""
     global conn, cursor
 
     try:
-        # TODO: change envpath to be the user given config file, default to .env if none
-        ENV_PATH = ".env"
-        loaded = load_dotenv(dotenv_path=ENV_PATH)
+        print(f"Using configuration file: {config_file}")
+        loaded = load_dotenv(dotenv_path=config_file)
 
         if not loaded:
             raise FileNotFoundError
