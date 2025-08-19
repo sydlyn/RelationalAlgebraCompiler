@@ -1,6 +1,8 @@
 # ra_compiler/parser.py
+'''Use the Lark parser and grammar to parse the query and handle errors.'''
 
-import os, sys
+import os
+import sys
 from lark import Lark
 import lark.exceptions
 from .utils import clean_exit, print_error
@@ -11,15 +13,17 @@ PROJ_DIR = os.path.dirname(__file__)
 GRAMMAR_PATH = os.path.join(PROJ_DIR, GRAMMAR_FILE)
 
 # open the grammar file and set up the parser
-try: 
-    with open(GRAMMAR_PATH) as f:
+try:
+    with open(GRAMMAR_PATH, encoding="utf-8") as f:
         grammar_text = f.read()
-        
-    # lark_parser = Lark(grammar_text, parser='lalr') #TODO: change to utilize LALR parser
+
+    #TODO: change to utilize LALR parser
+    # lark_parser = Lark(grammar_text, parser='lalr')
     lark_parser = Lark(grammar_text, parser='earley', ambiguity='explicit')
 
 except FileNotFoundError:
-    print(f"Grammar file '{GRAMMAR_FILE}' not found at {PROJ_DIR}/. Please check the path.", file=sys.stderr)
+    print(f"Grammar file '{GRAMMAR_FILE}' not found at {PROJ_DIR}/. \
+          Please check the path.", file=sys.stderr)
     clean_exit(1)
 except lark.exceptions.LarkError as e:
     print(f"Error in grammar file '{GRAMMAR_FILE}': {e}", file=sys.stderr)
@@ -36,9 +40,8 @@ def parse_query(query):
         if not isinstance(query, str):
             print(f"Invalid query type: {type(query)}. Expected a string.")
             return None
-        
+
         query = clean_query(query)
-    
         parsed = lark_parser.parse(query)
 
         return parsed
@@ -53,7 +56,7 @@ def parse_query(query):
 
 def clean_query(query):
     """Clean the input query to ensure it is ready to be parsed."""
-    
+
     # remove leading/trailing whitespace and end line characters
     query = query.strip().strip(",;")
 
@@ -62,7 +65,7 @@ def clean_query(query):
 
     # replace any backward slahsed keywords with forward slashes
     query = query.replace("\\", "/")
-    
+
     return query
 
 # print helpful error messages based on the type of unexpected token encountered
@@ -79,7 +82,7 @@ def handle_unexpected_token(query, error):
         # print(error.pos_in_stream)
         # print(f"Token: {error.token}")
         # print("%r" % error.token)
-        
+
         # print(error.token_history)
         # print(list(lark_parser.lex(query)))
         # for i, token in enumerate(lark_parser.lex(query)):
@@ -88,23 +91,24 @@ def handle_unexpected_token(query, error):
 
         # print("~~~~~~~~~~~~~~ UNEXPECTED TOKEN ~~~~~~~~~~~~~~~")
 
-        # print(f"### Error Parsing Query ###")
-        print_error(f"Error Parsing Query:", "ParseError")
+        print_error("Error Parsing Query:", "ParseError")
 
         # get the tokens that are allowed at the error position
         allowed = error.accepts or error.expected
+
         # if the only allowed tokens are parentheses...
-        if allowed == {'LPAR'} or allowed == {'RPAR'}:
+        if allowed in [{'LPAR'}, {'RPAR'}]:
             print("Missing parentheses.")
-        
-        # if an / is used incorrectly, determine if it is an incorrect operator or a misused division operator
+
+        # if an / is used incorrectly,
+        # determine if it is an incorrect operator or a misused division operator
         elif 'MATH_OP' == error.token.type and error.token == "/":
             next_tok = get_token_at_pos(query, error.pos_in_stream + 1)
             if next_tok and next_tok.type == 'CNAME':
                 print(f"Unknown Operator: {error.token}{next_tok.value}")
             else:
                 print("Division operator '/' is not allowed in this context.")
-            
+
         # if the end is reached unexpectedly...
         elif error.token.type == '$END':
             print("Unexpected end of query. Check for missing operators or parentheses.")

@@ -1,7 +1,7 @@
 # ra_compiler/cli.py
+'''The command line interface handler. Handles program set up and user input.'''
 
 import argparse
-import sys
 import pathlib
 from rich.console import Console
 from rich.table import Table
@@ -11,28 +11,23 @@ from .translator import RATranslator
 from .executor import execute, saved_results
 from .utils import clean_exit, print_error, print_debug
 
-app = None
-open_windows = []
-qt_thread = None
-
 def main():
     '''Main entry point for the RACompiler command line interface.'''
 
     # set up argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("config_file", nargs="?", help="Path to the SQL backend configuration file")
+    parser.add_argument("config_file", nargs="?", default=".env",
+                        help="path to the SQL backend configuration file")
+    parser.add_argument("-out", action="store_true",
+                        help="save output tables as CSVs to the out/ folder")
+
+    # parse the command line arguments
     args = parser.parse_args()
 
-    # grab the config file if given one, else default to ".env"
-    config = args.config_file if args.config_file else ".env"
+    setup_mysql(args.config_file)
+    run(args.out)
 
-    setup_mysql(config)
-
-    # app = QApplication(sys.argv)
-    run()
-    sys.exit(app.exec_())
-
-def run():
+def run(save_to_out=False):
     '''Repeatedly handle user input, parses queries, and displays results.'''
 
     try:
@@ -50,36 +45,30 @@ def run():
             if query.lower().strip(" /,.()") in exit_commands:
                 clean_exit()
 
+            # if the input is a help command, print out the quick reference doc
             help_commands = ['help', 'h', '-h', '-help']
             if query.lower().strip(" /,.()") in help_commands:
-                file_path = 'docs/quick_reference.txt' 
-                try:
-                    with open(file_path, 'r') as file:
-                        content = file.read()
-                        print(content)
-                except FileNotFoundError:
-                    print(f"Error: File '{file_path}' not found.")
-                except Exception as e:
-                    print(f"An error occurred: {e}")
+                file_path = 'docs/quick_reference.txt2'
+                with open(file_path, 'r', encoding="utf-8") as file:
+                    content = file.read()
+                    print(content)
                 continue
 
+            # if something goes wrong handling the query, skip to the next one
             result = handle_query(query, query_counter)
             if result is None:
                 print("An error occurred while processing the query. Please try again.")
                 continue
-            
-            
-            # print the results without the df index
+
+            # cleanly output the results
             print("Execution Result:")
-            print(result.name)
-            print(result.df.to_string(index=False))
-
-            path = pathlib.Path(f"out/{result.name}.csv").absolute()
-            result.df.to_csv(path, index=False)
-
-            # output the results in a separate window?
             show_dataframe(result.name, result.df)
-                        
+
+            # if specified, save the result to a csv file in the out/ folder
+            if save_to_out:
+                path = pathlib.Path(f"out/{result.name}.csv").absolute()
+                result.df.to_csv(path, index=False)
+
             query_counter += 1
 
     except KeyboardInterrupt:
@@ -87,21 +76,20 @@ def run():
     except EOFError:
         clean_exit()
     except Exception as e:
-        print_error(f"An Error Occurred: {e}", e)    
+        print_error(f"An Error Occurred: {e}", e)
         clean_exit(1)
 
 def handle_query(query, query_count=0):
     """Parse, translate, and execute a single query input."""
 
-    print_debug(f"Handling query: {query}")
-
     parsed_query = parse_query(query)
     if parsed_query is None:
         return None
+
     # FOR TESTING: print the parsed query : Lark Tree
-    pretty_parsed = parsed_query.pretty()
-    print_debug(f"Parsed Query: {pretty_parsed}")
-      
+    # pretty_parsed = parsed_query.pretty()
+    # print_debug(f"Parsed Query: {pretty_parsed}")
+
     # translate the parsed query into an intermediate representation
     translation = None
     try:
@@ -122,13 +110,15 @@ def handle_query(query, query_count=0):
     saved_results[result.name] = result
     return result
 
-# pretty print the table 
+# pretty print the table
 def show_dataframe(df_name, df):
+    """Print out a pandas DataFrame with a corresponding name."""
+
     console = Console()
     table = Table(title=df_name)
     for col in df.columns:
         table.add_column(col)
     for _, row in df.iterrows():
         table.add_row(*map(str, row))
-    
+
     console.print(table)

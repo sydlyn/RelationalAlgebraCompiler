@@ -1,7 +1,7 @@
 # ra_compiler/translator.py
+'''Translate the Lark parsed Tree into a dict.'''
 
 from lark import Transformer
-from .utils import clean_exit, print_debug
 
 class RATranslator(Transformer):
     """Transforms a Lark parse tree into a relational algebra representation."""
@@ -15,7 +15,7 @@ class RATranslator(Transformer):
         alias = f"_rac_q{self.query_count}_t{self.alias_counter}"
         self.alias_counter += 1
         return alias
-    
+
     def add_alias(self, expr):
         if "table_alias" not in expr:
             expr["table_alias"] = self._new_alias()
@@ -30,7 +30,7 @@ class RATranslator(Transformer):
 
     def unary_ops(self, items):
         return { "op_type": "unary"} | items[0]
-    
+
     def projection(self, items):
         prefix, attributes, table = items
 
@@ -49,7 +49,7 @@ class RATranslator(Transformer):
             "table": table,
             "condition": condition,
         })
-    
+
     def group(self, items):
         attributes, aggr_cond, table = items
         return self.add_alias({
@@ -58,7 +58,7 @@ class RATranslator(Transformer):
             "attributes": attributes,
             "aggr_cond": aggr_cond,
         })
-    
+
     def rename(self, items):
         cname, table = items
         return {
@@ -73,7 +73,7 @@ class RATranslator(Transformer):
             "operation": "remove_duplicates",
             "table": table,
         })
-    
+
     def sort(self, items):
         sort_attributes, table = items
         return self.add_alias({
@@ -81,7 +81,7 @@ class RATranslator(Transformer):
             "table": table,
             "sort_attributes": sort_attributes,
         })
-    
+
     ## ~~~~~~~~ SET OPERATIONS ~~~~~~~~ ##
 
     def set_ops(self, items):
@@ -95,7 +95,7 @@ class RATranslator(Transformer):
             "table1": table1,
             "table2": table2,
         })
-    
+
     def intersection(self, items):
         table1, prefix, table2 = items
         return self.add_alias({
@@ -104,7 +104,7 @@ class RATranslator(Transformer):
             "table1": table1,
             "table2": table2,
         })
-    
+
     def difference(self, items):
         table1, prefix, table2 = items
         return self.add_alias({
@@ -126,16 +126,16 @@ class RATranslator(Transformer):
             "table1": table1,
             "table2": table2,
         })
-    
+
     def join(self, items):
         if len(items) == 3:
             table1, join_prefix, table2 = items
             specs = None
         elif len(items) == 4:
-            table1, join_prefix, specs, table2 = items                
+            table1, join_prefix, specs, table2 = items
         else:
             raise ValueError(f"Unexpected number of items in join: {len(items)}")
-        
+
         # determine what type of join by the prefix
         def get_join_type(join_prefix):
             join = join_prefix.lstrip('/').lower()
@@ -145,7 +145,7 @@ class RATranslator(Transformer):
                     return "semi", "right"
                 else:
                     return "semi", "left"
-                
+
             if "right" in join:
                 return "right"
             elif "left" in join:
@@ -194,34 +194,33 @@ class RATranslator(Transformer):
 
     def attributes(self, attrs):
         return attrs
-    
+
     def sort_attributes(self, attrs):
         return attrs
-            
-    #TODO: implemet b->b_new
+
     def attr(self, items):
         if isinstance(items[0], dict):
             return {
                 'alias': str(items[1]),
                 'cond': items[0]
             }
-        else:
-            return items
-    
+
+        return items
+
     def alias_attr(self, items):
         return {
             'type': 'alias',
             'attr': items[0],
             'alias': str(items[1])
         }
-        
+
     def sort_attr(self, items):
         return (items[0], items[1])
-    
+
     def math_cond(self, items):
         if len(items) == 1:
             return items[0]
-        
+
         left, op, right = items
         return {
             "type": "math_cond", 
@@ -233,7 +232,7 @@ class RATranslator(Transformer):
     def comp_cond(self, items):
         if len(items) == 1:
             return items[0]
-        
+
         left, op, right = items
         return {
             "type": "comp_cond", 
@@ -241,7 +240,7 @@ class RATranslator(Transformer):
             "op": op, 
             "right": right
         }
-    
+
     def aggr_conds(self, items):
         return items
 
@@ -252,11 +251,11 @@ class RATranslator(Transformer):
             return [items[0], items[1]]
         else:
             raise ValueError("Invalid aggregation condition format")
-    
+
     def aggr_func(self, items):
         aggr_op, attrs = items
 
-        AGGR_OP_MAP = {
+        aggr_op_map = {
             "sum": "sum",
             "count": "count",
             "avg": "mean",
@@ -264,35 +263,35 @@ class RATranslator(Transformer):
             "min": "min",
             "max": "max"
         }
-        if aggr_op not in AGGR_OP_MAP:
+        if aggr_op not in aggr_op_map:
             raise ValueError(f"Unsupported aggregation operator: {aggr_op}")
-       
-        return {"aggr": AGGR_OP_MAP[aggr_op], "attr": attrs}
+
+        return {"aggr": aggr_op_map[aggr_op], "attr": attrs}
 
     def ALL_ATTR(self, _):
         return "*"
 
     def MATH_OP(self, token):
         return token.value
-    
+
     def COMP_OP(self, token):
         return token.value
-    
+
     def AGGR_OP(self, token):
         return token.value
 
     def COUNT_OP(self, token):
         return token.value
-    
+
     def AND(self, _):
         return "AND"
-    
+
     def OR(self, _):
         return "OR"
-    
+
     def SORT_DIR(self, token):
         return token.value.upper() == "ASC"
-    
+
     def TRUTH_VAL(self, token):
         if token.value.lower() in ["true", "t"]:
             return True
@@ -300,15 +299,15 @@ class RATranslator(Transformer):
             return False
         else:
             raise ValueError(f"Invalid truth value: {token.value}")
-    
+
     def CNAME(self, token):
         return token.value
-    
+
     def NUMBER(self, token):
         return int(token.value)
-    
+
     def ESCAPED_STRING(self, token):
         return token.value
-    
+
     def _ambig(self, options):
         return options[0]  # pick the first ambiguous option

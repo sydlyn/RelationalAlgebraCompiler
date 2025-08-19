@@ -1,24 +1,34 @@
 # ra_compiler/executor.py
+'''Execute the given translated query and produce a result DF.'''
 
 import pandas as pd
 from .mysql import run_query
-from .utils import clean_exit, print_error, print_warning, print_debug
-from .exceptions import *
+from .utils import print_error, print_warning
+from .exceptions import TableNotFoundError, TableAlreadyExists, InvalidColumnName
 
 saved_results = {}
 
 class NamedDataFrame():
-    def __init__(self, name, df):
+    """
+    Represents a pandas DataFrame wiht an associated name.
+    
+    Attributes:
+        name (str): the name of the dataframe  
+        df (pd.DataFrame): the corresponding pandas DataFrame  
+    """
+
+    def __init__(self, name, df: pd.DataFrame):
         self.name = name
         self.df = df
 
     def __repr__(self):
         return f"NamedDataFrame(name={self.name}, shape={self.df.shape})"
-    
+
     def __str__(self):
         return f"NamedDataFrame: {self.name} (shape: {self.df.shape})"
-    
+
     def copy(self):
+        '''Return a copy of the NamedDataFrame.'''
         return NamedDataFrame(self.name, self.df.copy())
 
 def execute(expr):
@@ -26,14 +36,14 @@ def execute(expr):
 
     operation = None
 
-    try: 
+    try:
         if not isinstance(expr, dict):
             # if it is a string, assume it is a table name and load the table
             if isinstance(expr, str):
                 return load_table(expr)
             else:
                 raise TypeError("RA expression must be a dictionary representing the query.")
-        
+
         # ensure the expression has an operation type
         operation = expr.get("operation", None)
         if operation is None:
@@ -51,13 +61,13 @@ def execute(expr):
                 return exec_selection(expr, ndf)
             case "group":
                 return exec_group(expr, ndf)
-            case "rename": 
+            case "rename":
                 return exec_rename(expr, ndf)
             case "remove_duplicates":
                 return exec_remove_duplicates(expr, ndf)
             case "sort":
                 return exec_sort(expr, ndf)
-            
+
             # set operations
             case "union":
                 return exec_union(expr, ndf, ndf2)
@@ -65,7 +75,7 @@ def execute(expr):
                 return exec_interestion(expr, ndf, ndf2)
             case "difference":
                 return exec_difference(expr, ndf, ndf2)
-            
+
             # join operations
             case "cross":
                 return exec_cross(expr, ndf, ndf2)
@@ -73,10 +83,10 @@ def execute(expr):
                 return exec_join(expr, ndf, ndf2)
             case "divide":
                 return exec_divide(expr, ndf, ndf2)
-            
+
             case _:
                 raise ValueError(f"Operation not supported yet: {expr['operation']}")
-            
+
     except TableNotFoundError as e:
         print_error(f"Table '{e.table_name}' does not exist in the database.", e)
         return None
@@ -89,11 +99,11 @@ def execute(expr):
 
 def get_tables(expr):
     """Ensure the desired table(s) exist depending on the op_type."""
-    
+
     op_type = expr.get("op_type", None)
     if op_type is None:
         raise ValueError("RA expression must contain 'op_type' key.")
-    
+
     match op_type:
         case "unary":
             ndf = load_table(expr.get("table"))
@@ -103,7 +113,8 @@ def get_tables(expr):
             ndf2 = load_table(expr.get("table2"))
 
             if not ndf.df.columns.equals(ndf2.df.columns):
-                raise ValueError("Set operations require both tables to have the same columns in the same order.")
+                raise ValueError("Set operations require both tables to \
+                                 have the same columns in the same order.")
 
             return ndf, ndf2
         case "join":
@@ -117,16 +128,16 @@ def get_tables(expr):
 def load_table(table_name):
     """Return a pandas DataFrame of the desired table from the SQL connection."""
 
-    if table_name is None:  
+    if table_name is None:
         raise TableNotFoundError()
 
     # if the table is a string...
     if isinstance(table_name, str):
 
-        # check if a saved result  
+        # check if a saved result
         if table_name in saved_results:
             return saved_results[table_name].copy()
-         
+
         # or check if it is a table from SQL connection
         if not check_sql_for_table(table_name):
             raise TableNotFoundError(table_name)
@@ -146,18 +157,18 @@ def load_table(table_name):
         saved_results[table_name] = ndf
 
         return ndf.copy()
-    
+
     # otherwise, execute the nested operation
-    else: 
-        ndf = (execute(table_name))
+    else:
+        ndf = execute(table_name)
         return ndf
-    
+
 def check_sql_for_table(table_name):
     """Return True if the given table name is in the connected sql database."""
 
     check_query = f"SHOW TABLES LIKE '{table_name}'"
     result = run_query(check_query)
-    
+
     if len(result[1]) == 0:
         return False
 
@@ -173,16 +184,16 @@ def exec_projection(expr, ndf):
     attributes = process_attributes(df, expr["attributes"])
 
     result_df = df[attributes]
-    
+
     # handle duplicates if necessary
     if not keep_dups:
         result_df = result_df.drop_duplicates()
-    
+
     return NamedDataFrame(expr['table_alias'], result_df)
 
 def exec_selection(expr, ndf):
     """Execute the given selection operation on the given DataFrame."""
-    
+
     df = ndf.df
     cond = expr["condition"]
     mask = evaluate_comparison_cond(df, cond)
@@ -213,8 +224,8 @@ def exec_group(expr, ndf):
             agg_dict[alias] = pd.NamedAgg(column=temp_col, aggfunc=func)
 
         elif func == "count":
-            mask = ~pd.concat([df[c].isna() for c in col], axis=1).all(axis=1) # count when EITHER is not null
-            # mask = ~pd.concat([df[c].isna() for c in col], axis=1).any(axis=1) # count when BOTH is not null
+            # count when EITHER is not null
+            mask = ~pd.concat([df[c].isna() for c in col], axis=1).all(axis=1)
 
             temp_col = f"__mask_{alias}"
             df[temp_col] = mask.astype(int)
@@ -231,6 +242,8 @@ def exec_group(expr, ndf):
                 agg_func = lambda x: x.min() if x.notna().any() else pd.NA
             elif func == "max":
                 agg_func = lambda x: x.max() if x.notna().any() else pd.NA
+            else:
+                raise ValueError(f"Unsupported aggregation function: {func}")
 
             agg_dict[alias] = pd.NamedAgg(column=col, aggfunc=agg_func)
 
@@ -241,7 +254,7 @@ def exec_rename(expr, ndf):
     """Rename the table to the given alias."""
 
     alias = expr.get("table_alias")
-    
+
     # check if the alias is in the sql database or is a saved table
     if check_sql_for_table(alias) or alias in saved_results:
         raise TableAlreadyExists(alias)
@@ -255,7 +268,7 @@ def exec_remove_duplicates(expr, ndf):
 
 def exec_sort(expr, ndf):
     """Sort the DataFrame based on the given attributes."""
-    
+
     df = ndf.df
     sort_attrs = expr["sort_attributes"]
 
@@ -264,7 +277,7 @@ def exec_sort(expr, ndf):
         col = attr[0]
         if col not in df.columns:
             raise InvalidColumnName(col)
-        
+
         result_df = df.sort_values(by=col, ascending=attr[1])
 
     return NamedDataFrame(expr['table_alias'], result_df)
@@ -285,13 +298,13 @@ def exec_union(expr, df1, df2):
         result_df = result_df.drop_duplicates()
 
     return NamedDataFrame(expr['table_alias'], result_df)
-        
+
 def exec_interestion(expr, df1, df2):
     """Execute the given intersection operation on the given DataFrames."""
 
     keep_dups = expr.get("keep_dups", False)
     df1_dr, df2_dr = prepare_for_set_op(df1.df, df2.df, keep_dups)
-        
+
     # merge the data frames and keep only the relevant columns
     inter = pd.merge(df1_dr, df2_dr)
     result_df = inter[df1.df.columns]
@@ -312,7 +325,8 @@ def exec_difference(expr, df1, df2):
     return NamedDataFrame(expr["table_alias"], result_df)
 
 def prepare_for_set_op(df1, df2, keep_dups=False):
-    """Prepares two DataFrames for set operations by either dropping duplicates or adding row counts (for bag semantics)."""
+    """Prepares two DataFrames for set operations by either 
+    dropping duplicates or adding row counts (for bag semantics)."""
 
     # remove duplicates if not a bag
     if not keep_dups:
@@ -328,7 +342,7 @@ def prepare_for_set_op(df1, df2, keep_dups=False):
             )
         df1_clean = add_row_counts(df1)
         df2_clean = add_row_counts(df2)
-    
+
     return df1_clean, df2_clean
 
 
@@ -362,7 +376,7 @@ def exec_join(expr, ndf1, ndf2):
             df1_dr, df2_dr, how=merge_how, on=attributes, suffixes=('_L', '_R')
         )
     except KeyError as e:
-        raise InvalidColumnName(e.args[0])
+        raise InvalidColumnName(e.args[0]) from e
 
     # get the columns that are from the left and the right dataframes after the join
     left_cols = [c for c in merge.columns if (c in df1_dr.columns or c.endswith('_L'))]
@@ -372,7 +386,7 @@ def exec_join(expr, ndf1, ndf2):
     if not condition:
         result_df = handle_output_cols(merge, join_type, left_cols, right_cols, orig_cols)
         return clean_join_result(expr, result_df)
-    
+
     # if a condition is specified, mask the crossed DataFrame
     mask = evaluate_comparison_cond(merge, condition)
     if isinstance(mask, bool):
@@ -409,7 +423,10 @@ def handle_output_cols(merge, join_type, left_cols, right_cols, original_cols):
     else:
         # print a warning if the output has duplicate columns
         if set(merge.columns) != set(original_cols):
-            print_warning("Duplicate columns found in join. Can cause unexpected results. Please ensure unique column names across tables.", "JoinWarning")
+            print_warning("Duplicate columns found in join. \
+                          Can cause unexpected results. \
+                          Please ensure unique column names across tables.",
+                          "JoinWarning")
         result_df = merge
 
     return result_df
@@ -446,6 +463,8 @@ def handle_outer_join(masked, merge, join_type, left_cols, right_cols):
         parts = [masked, right_only]
     elif "outer" in join_type:
         parts = [masked, left_only, right_only]
+    else:
+        raise ValueError("Invalid join type given.")
 
     # align and combine
     out = pd.concat(parts, ignore_index=True)
@@ -512,29 +531,31 @@ def resolve_operand(df, operand, left=True):
             t = operand.get("type")
             if t == "math_cond":
                 return evaluate_math_cond(df, operand)
-            elif t == "comp_cond":
+
+            if t == "comp_cond":
                 return evaluate_comparison_cond(df, operand)
-            elif t == "alias":
+            if t == "alias":
                 alias = operand["alias"]
                 df[alias] = resolve_operand(df, operand["attr"])
                 return df[alias]
-            else:
-                raise ValueError(f"Unknown operand type: {t}")
+
+            raise ValueError(f"Unknown operand type: {t}")
 
         # resolve table.attr names
         if isinstance(operand, list):
             join_name = operand[-1] + "_L" if left else operand[-1] + "_R"
             if operand[-1] in df:
                 return df[operand[-1]]
-            elif join_name in df:   
+
+            if join_name in df:
                 return df[join_name]
-        
+
         if isinstance(operand, str):
             # if a string wrapped in "", assume a string literal
-            if ((operand.startswith('"') and operand.endswith('"')) 
+            if ((operand.startswith('"') and operand.endswith('"'))
                 or (operand.startswith("'") and operand.endswith("'"))):
                 return operand.strip('"\'')
-            
+
             # if a string is a column name, return the column
             join_name = operand + "_L" if left else operand + "_R"
             if join_name in df:
@@ -545,7 +566,7 @@ def resolve_operand(df, operand, left=True):
         return operand
 
     except KeyError as e:
-        raise InvalidColumnName(e.args[0])
+        raise InvalidColumnName(e.args[0]) from e
 
 def evaluate_math_cond(df, expr):
     """Evaluate a math expression with the given df."""
@@ -553,28 +574,29 @@ def evaluate_math_cond(df, expr):
     right = resolve_operand(df, expr["right"], left=False)
     op = expr["op"]
 
-    if op == "+":
-        return left + right
-    elif op == "-":
-        return left - right
-    elif op == "*":
-        return left * right
-    elif op == "/":
-        return left / right
-    elif op == "%":
-        return left % right
-    elif op == "^":
-        return left ** right
-    else:
-        raise ValueError(f"Unsupported math operator: {op}")
-    
+    match op:
+        case "+":
+            return left + right
+        case "-":
+            return left - right
+        case "*":
+            return left * right
+        case "/":
+            return left / right
+        case "%":
+            return left % right
+        case "^":
+            return left ** right
+        case _:
+            raise ValueError(f"Unsupported math operator: {op}")
+
 def evaluate_comparison_cond(df, cond):
     """Recursively evaluate a comparison or logical condition."""
 
     # if the condition is a boolean, return a full/empty mask
     if isinstance(cond, bool):
         return pd.Series(cond, index=df.index)
-    
+
     # recursive and/or condition
     if cond["op"] in {"AND", "OR"}:
         left_mask = evaluate_comparison_cond(df, cond["left"])
@@ -665,7 +687,7 @@ def parse_aggr_conds(aggr_conds, df):
             aggr = aggr[0]
         else:
             alias = None
-    
+
         op = aggr["aggr"].lower()
         attr = aggr.get("attr", "*")
         attrs = process_attributes(df, attr)

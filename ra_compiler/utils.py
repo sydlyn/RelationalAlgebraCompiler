@@ -1,37 +1,37 @@
 # ra_compiler/utils.py
 
-import sys, traceback
+import sys
+# import traceback
 from . import mysql
 
-debug_counter = 1
+DEBUG_COUNTER = 1
 
-def print_error(err_msg="", e="RACError"):
+def print_error(err_msg="", etype="RACError"):
     '''Print the given error messgae.'''
-    if isinstance(e, str):
-        etype = e
-    else:
-        etype = type(e).__name__
+
+    if isinstance(etype, Exception):
+        etype = type(etype).__name__
 
     print(f"\n(RAC-ERR) [{etype}] {err_msg}", file=sys.stderr)
-    print(traceback.format_exc())
-    return
+    # print(traceback.format_exc())
 
 def print_warning(warn_msg="", e="RACWarning"):
     '''Print the given warning message.'''
+
     if isinstance(e, str):
         etype = e
     else:
         etype = type(e).__name__
 
     print(f"(RAC-WARN) [{etype}] {warn_msg}", file=sys.stderr)
-    return
 
 def print_debug(debug_msg=""):
     '''Print a the given debug message.'''
-    global debug_counter
-    print(f"DEBUG {debug_counter}: {debug_msg}")
-    debug_counter += 1
-    return
+    global DEBUG_COUNTER
+
+    print(f"DEBUG {DEBUG_COUNTER}: {debug_msg}")
+
+    DEBUG_COUNTER += 1
 
 def clean_exit(exit_code=0):
     '''Cleanly exits the RACompiler application.'''
@@ -41,4 +41,4 @@ def clean_exit(exit_code=0):
     try:
         mysql.close_mysql()
     finally:
-        exit(exit_code)
+        sys.exit(exit_code)

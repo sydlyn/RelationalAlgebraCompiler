@@ -1,5 +1,5 @@
 # ra_compiler/__main__.py
-# redirecting to the main function of the CLI module
+'''Redirecting to the main function of the CLI module.'''
 
 from ra_compiler.cli import main
 

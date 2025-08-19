@@ -10,22 +10,22 @@ class TestHandleQuery(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         db.setup_mysql()
-        
-        cls.conn = getattr(db, "conn", getattr(db, "connection", None))
-        if cls.conn is None:
+
+        cls.CONN = getattr(db, "CONN", getattr(db, "connection", None))
+        if cls.CONN is None:
             raise unittest.SkipTest("No DB connection available")
 
-        cur = cls.conn.cursor()
+        cur = cls.CONN.cursor()
 
         # Prepare testTable
         cur.execute("DROP TABLE IF EXISTS testTable;")
         cur.execute("CREATE TABLE testTable (a INT, b INT);")
-        cur.executemany("INSERT INTO testTable (a, b) VALUES (%s, %s);", 
+        cur.executemany("INSERT INTO testTable (a, b) VALUES (%s, %s);",
                         [(0,1,), (1,2,), (2,2,), (4,3,)])
 
         # Prepare R table
         cur.execute("DROP TABLE IF EXISTS R;")
-        cur.execute("""CREATE TABLE R 
+        cur.execute("""CREATE TABLE R
                     (age INT, b INT, c INT, d INT, name VARCHAR(50));""")
         rac_rows = [
             (12, 5, 19, 4, "alice"),
@@ -50,26 +50,26 @@ class TestHandleQuery(unittest.TestCase):
         # Prepare T table
         cur.execute("DROP TABLE IF EXISTS T;")
         cur.execute("""CREATE TABLE T (age INT, b INT, c INT);""")
-        T_rows = [
+        t_rows = [
             (1, 3, 100),
             (3, 4, 200),
             (6, 5, 300),
             (12, 6, 400),
         ]
-        cur.executemany("INSERT INTO T VALUES (%s, %s, %s)", T_rows)
+        cur.executemany("INSERT INTO T VALUES (%s, %s, %s)", t_rows)
 
-        cls.conn.commit()
+        cls.CONN.commit()
         cur.close()
 
     @classmethod
     def tearDownClass(cls):
         # Clean up testTable
-        if cls.conn:
-            cur = cls.conn.cursor()
+        if cls.CONN:
+            cur = cls.CONN.cursor()
             cur.execute("DROP TABLE IF EXISTS testTable;")
             cur.execute("DROP TABLE IF EXISTS R;")
             cur.execute("DROP TABLE IF EXISTS T;")
-            cls.conn.commit()
+            cls.CONN.commit()
             cur.close()
 
         db.close_mysql()
@@ -115,7 +115,8 @@ class TestHandleQuery(unittest.TestCase):
         self.assertTrue((df["age"] > 10).all())
 
     def test_group_sum_avg(self):
-        df = self._run_and_check("(/group {age, b; sum(c), avg(d)} R)", ["age", "b", "sum_c", "mean_d"])
+        df = self._run_and_check("(/group {age, b; sum(c), avg(d)} R)",
+                                 ["age", "b", "sum_c", "mean_d"])
         self.assertGreater(len(df), 0)
 
     def test_rho_and_join(self):
@@ -144,10 +145,11 @@ class TestHandleQuery(unittest.TestCase):
 
     def test_delta_rho(self):
         df = self._run_and_check("(/rho {noDup} (/delta R))", ["age", "b", "c", "d", "name"])
-        self.assertLessEqual(len(df), len(pd.read_sql("SELECT * FROM R", self.conn)))
+        self.assertLessEqual(len(df), len(pd.read_sql("SELECT * FROM R", self.CONN)))
 
     def test_division(self):
-        df = self._run_and_check("(R /div (/selection {b = 3} (/pi^d {b} T)))", ["age", "c", "d", "name"])
+        df = self._run_and_check("(R /div (/selection {b = 3} (/pi^d {b} T)))",
+                                 ["age", "c", "d", "name"])
         self.assertGreaterEqual(len(df), 0)
 
     def test_various_joins(self):

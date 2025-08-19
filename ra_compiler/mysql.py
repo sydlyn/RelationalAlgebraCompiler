@@ -1,16 +1,18 @@
 # ra_compiler/mysql.py
+'''Set up and tear down for a mySQL connection.'''
 
 import os
-import mysql.connector
+from contextlib import suppress
 from dotenv import load_dotenv
+import mysql.connector
 from .utils import print_error, clean_exit
 
-conn = None
-cursor = None
+CONN = None
+CURSOR = None
 
 def setup_mysql(config_file=".env"):
     """Initialize the MySQL connection and cursor."""
-    global conn, cursor
+    global CONN, CURSOR
 
     try:
         print(f"Using configuration file: {config_file}")
@@ -19,9 +21,9 @@ def setup_mysql(config_file=".env"):
         if not loaded:
             raise FileNotFoundError
 
-        conn = connect()
+        CONN = connect()
 
-        cursor = conn.cursor()
+        CURSOR = CONN.cursor()
 
         print("MySQL Connection Successfully Complete")
 
@@ -45,50 +47,50 @@ def connect():
     try:
         return mysql.connector.connect(
             host=os.getenv("DB_HOST"),
-            port=int(os.getenv("DB_PORT", 3306)),
+            port=int(os.getenv("DB_PORT", "3306")),
             user=os.getenv("DB_USER"),
             password=os.getenv("DB_PASSWORD"),
             database=os.getenv("DB_NAME")
         )
-    
+
     except mysql.connector.Error as e:
         print_error(f"Database connection failed: {e}", e)
         clean_exit(1)
 
 def close_mysql():
     """Closes the MySQL cursor and connection."""
-    global conn, cursor
 
-    try:
-        if conn:
-            conn.close()
+    if CONN:
+        with suppress(Exception):
+            CONN.close()
 
-        if cursor:
-            cursor.close()
-    finally:
-        return
+    if CURSOR:
+        with suppress(Exception):
+            CURSOR.close()
+
 
 def run_query(sql):
     """Run a SQL query and return the results."""
-    global conn, cursor
 
     # if there is no current connection, set one up
-    if conn is None or cursor is None:
+    if CONN is None or CURSOR is None:
         setup_mysql()
 
     try:
-        cursor.execute(sql)
+        CURSOR.execute(sql)
 
-        columns = [col[0] for col in cursor.description]
-        rows = cursor.fetchall()
-    
+        columns = [col[0] for col in CURSOR.description]
+        rows = CURSOR.fetchall()
+
         return columns, rows
 
     except mysql.connector.Error as e:
-        handle_SQL_error(e, sql)
+        handle_sql_error(e, sql)
         return None
 
-def handle_SQL_error(e, sql):
+def handle_sql_error(e, sql):
+    """Handle mySQL error codes."""
+
     if e.errno == 1146:
         print_error(f"SQL error: Table does not exist. {sql} ", e)
     else:
