@@ -16,9 +16,10 @@ keywords = ["relational algebra", "compiler", "SQL", "database"]
 dependencies = [
   "lark-parser>=0.11.0",
   "mysql-connector-python>=8.0.25",
-  "pandas>=2.0",
+  "pandas>=1.5",
   "rich>=13.0",
-  "python-dotenv>=1.0"
+  "python-dotenv>=1.0",
+  "pyreadline3; sys_platform == 'win32'"
 ]
 
 [project.urls]
@@ -27,13 +28,13 @@ dependencies = [
 [tool.setuptools.packages.find]
 where = ["."]
 
-[project.scripts]
-rac = "ra_compiler.cli:main"
-racTest = "tests.run_tests:main"
-
 [tool.pylint."MESSAGES CONTROL"]
 disable = [
     "global-statement",
     "broad-except",
     "missing-docstring",
 ]
+
+[project.scripts]
+rac = "ra_compiler.cli:main"
+racTest = "tests.run_tests:main"

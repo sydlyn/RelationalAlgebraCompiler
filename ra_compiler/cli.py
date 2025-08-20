@@ -1,8 +1,10 @@
 # ra_compiler/cli.py
 '''The command line interface handler. Handles program set up and user input.'''
 
+import os
 import argparse
 import pathlib
+import atexit
 from rich.console import Console
 from rich.table import Table
 from .mysql import setup_mysql
@@ -10,6 +12,14 @@ from .parser import parse_query
 from .translator import RATranslator
 from .executor import execute, saved_results
 from .utils import clean_exit, print_error, print_debug
+
+# import windows equivalent of readline
+try:
+    import readline  # Unix / macOS
+except ImportError:
+    # Windows fallback
+    import pyreadline3 as readline
+
 
 def main():
     '''Main entry point for the RACompiler command line interface.'''
@@ -34,6 +44,13 @@ def run(save_to_out=False):
         print("\nWelcome to RACompiler!")
         print("Type 'exit' to quit the application.")
         print("Type 'help' for a list of supported functions and syntax.")
+
+        # set up for the cli history so that you can view previous queries
+        history_file = ".ra_history"
+        if os.path.exists(history_file):
+            readline.read_history_file(history_file)
+        readline.set_history_length(50)
+        atexit.register(readline.write_history_file, history_file)
 
         query_counter = 0
         while True:
@@ -87,6 +104,8 @@ def run(save_to_out=False):
 
 def handle_query(query, query_count=0):
     """Parse, translate, and execute a single query input."""
+
+    # print_debug(f"query: {query}")
 
     parsed_query = parse_query(query)
     if parsed_query is None:

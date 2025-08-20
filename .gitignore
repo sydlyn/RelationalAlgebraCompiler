@@ -6,4 +6,4 @@ myconfig
 sql/
 csv/
 out/*
-
+.ra_history
