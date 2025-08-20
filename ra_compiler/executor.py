@@ -388,12 +388,52 @@ def prepare_for_set_op(df1, df2, keep_dups=False):
 
 ## ~~~~~~~~ MERGE OPERATIONS ~~~~~~~~ ##
 
-def exec_cross(expr, df1, df2):
+def prepare_for_merge_op(left_df, right_df):
+    """Ensure no duplicate column names between left_df and right_df.
+    Adds _L or _R suffixes to duplicates, preserving any existing suffixes."""
+
+    # grab the original columns from each table
+    left_cols = left_df.columns.tolist()
+    right_cols = right_df.columns.tolist()
+
+    def strip_suffixes(col):
+        # strip all trailing _L or _R occurrences
+        while col.endswith(("_L", "_R")):
+            col = col[:-2]
+        return col
+
+    # remove any existing _L/_R suffixes to get the base column name
+    left_bases = [strip_suffixes(c) for c in left_cols]
+    right_bases = [strip_suffixes(c) for c in right_cols]
+
+    duplicate_cols = set(left_bases) & set(right_bases)
+
+    # for the left table, add a _L subscript for columns that have a duplicate
+    for i, col in enumerate(left_bases):
+        if col in duplicate_cols:
+            left_cols[i] += "_L"
+
+    # for the right table, add a _L subscript for columns that have a duplicate
+    for i, col in enumerate(right_bases):
+        if col in duplicate_cols:
+            right_cols[i] += "_R"
+
+    # reset the df columns to be the updated column names
+    left_df.columns = left_cols
+    right_df.columns = right_cols
+
+def exec_cross(expr, ndf1, ndf2):
     """Execute the given cross operation on the given DataFrames."""
 
-    result_df = pd.merge(df1.df, df2.df, how="cross", suffixes=('_L', '_R'))
+    df1 = ndf1.df
+    df2 = ndf2.df
+
+    prepare_for_merge_op(df1, df2)
+    result_df = pd.merge(df1, df2, how="cross",
+                         suffixes=('_L', '_R'), validate="m:m")
 
     return NamedDataFrame(expr["table_alias"], result_df)
+
 
 def exec_join(expr, ndf1, ndf2):
     """Execute the given join operation on the given DataFrames."""
@@ -416,6 +456,7 @@ def exec_join(expr, ndf1, ndf2):
         else:
             merge_how = join_type
 
+        prepare_for_merge_op(df1_dr, df2_dr)
         merge = pd.merge(df1_dr, df2_dr, how=merge_how, on=attributes,
                          suffixes=('_L', '_R'), validate="m:m")
     except KeyError as e:
