@@ -42,7 +42,7 @@ def execute(expr):
     try:
         if not isinstance(expr, dict):
             # if it is a string, assume it is a table name and load the table
-            if not isinstance(expr, str):
+            if isinstance(expr, str):
                 return load_table(expr)
 
             # otherwise, if it is not a dict through an error
@@ -53,12 +53,15 @@ def execute(expr):
         if operation is None:
             raise ValueError("RA expression must contain 'operation' key.")
 
-        # recursively get/evaluate the relevant DataFrame(s)
+        # recursively get/evaluate the relevant DataFrame(s) for the operation
         ndf, ndf2 = get_tables(expr)
 
         # execute the operation
         match operation:
-            # unary operations
+            case "list":
+                result = exec_list()
+
+            # unary ops
             case "projection":
                 result = exec_projection(expr, ndf)
             case "selection":
@@ -72,7 +75,7 @@ def execute(expr):
             case "sort":
                 result = exec_sort(expr, ndf)
 
-            # set operations
+            # set ops
             case "union":
                 result = exec_union(expr, ndf, ndf2)
             case "intersection":
@@ -80,7 +83,7 @@ def execute(expr):
             case "difference":
                 result = exec_difference(expr, ndf, ndf2)
 
-            # join operations
+            # merge ops
             case "cross":
                 result = exec_cross(expr, ndf, ndf2)
             case "join":
@@ -112,6 +115,10 @@ def get_tables(expr):
         raise ValueError("RA expression must contain 'op_type' key.")
 
     match op_type:
+        # if a list op, return nothing
+        case "list":
+            return None, None
+        
         # if a unary op, get and return the one table
         case "unary":
             ndf = load_table(expr.get("table"))
@@ -129,8 +136,8 @@ def get_tables(expr):
 
             return ndf, ndf2
 
-        # if a join op, get and return the two tables
-        case "join":
+        # if a merge op, get and return the two tables
+        case "merge":
             ndf = load_table(expr.get("table1"))
             ndf2 = load_table(expr.get("table2"))
             return ndf, ndf2
@@ -187,6 +194,24 @@ def check_sql_for_table(table_name):
         return False
 
     return True
+
+def exec_list():
+    """Return a dict of all available tables."""
+    tables = {}
+
+    # get all tables from the sql connection
+    query = "SHOW TABLES;"
+    _, rows = run_query(query)
+    for row in rows:
+        tables[row[0]] = True
+
+    # get all new tables that have since been saved
+    for ndf in saved_results:
+        if ndf not in tables:
+            tables[ndf] = True
+
+    return list(tables)
+
 
 ## ~~~~~~~~ UNARY OPERATIONS ~~~~~~~~ ##
 
@@ -361,7 +386,7 @@ def prepare_for_set_op(df1, df2, keep_dups=False):
     return df1_clean, df2_clean
 
 
-## ~~~~~~~~ JOIN OPERATIONS ~~~~~~~~ ##
+## ~~~~~~~~ MERGE OPERATIONS ~~~~~~~~ ##
 
 def exec_cross(expr, df1, df2):
     """Execute the given cross operation on the given DataFrames."""
@@ -377,7 +402,7 @@ def exec_join(expr, ndf1, ndf2):
     condition = expr.get("condition")
     attributes = expr.get("attributes")
 
-    # add helper ids to the DataFrames
+    # add helper ids to the DataFrames and grab all the columns
     df1_dr = ndf1.df.reset_index().rename(columns={'index': '_left_id'})
     df2_dr = ndf2.df.reset_index().rename(columns={'index': '_right_id'})
     orig_cols = df1_dr.columns.tolist() + df2_dr.columns.tolist()

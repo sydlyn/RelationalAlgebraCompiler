@@ -25,7 +25,7 @@ This is a **relational algebra–focused** language for expressing queries over 
     - [Union](#union)
     - [Intersection](#intersection)
     - [Difference](#difference)
-- Join Operations: 
+- Merge Operations: 
     - [Cross Product](#cross-product)
     - [Joins](#joins)
     - [Divide](#divide)
@@ -36,7 +36,7 @@ This is a **relational algebra–focused** language for expressing queries over 
 
 - Unary operations: operate on a **single table**.
 - Set operations: combine **two tables with the same schema**.
-- Join operations: combine **two tables**, typically on related keys or conditions.
+- Merge operations: combine **two tables**, typically on related keys or conditions.
 
 ---
 
@@ -219,7 +219,7 @@ Returns rows in the first relation that **do not appear** in the second. Support
 
 ---
 
-## Join Operations
+## Merge Operations
 
 ### Cross Product
 

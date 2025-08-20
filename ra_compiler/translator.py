@@ -26,6 +26,12 @@ class RATranslator(Transformer):
     def start(self, items):
         return items[0]
 
+    def list(self, _):
+        return {
+            "operation": "list",
+            "op_type": "list"
+        }
+
     ## ~~~~~~~~ UNARY OPERATIONS ~~~~~~~~ ##
 
     def unary_ops(self, items):
@@ -114,10 +120,10 @@ class RATranslator(Transformer):
             "table2": table2,
         })
 
-    ## ~~~~~~~~ JOIN OPERATIONS ~~~~~~~~ ##
+    ## ~~~~~~~~ MERGE OPERATIONS ~~~~~~~~ ##
 
-    def join_ops(self, items):
-        return { "op_type": "join"} | items[0]
+    def merge_ops(self, items):
+        return {"op_type": "merge"} | items[0]
 
     def cross(self, items):
         table1, table2 = items

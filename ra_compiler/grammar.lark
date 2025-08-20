@@ -1,14 +1,16 @@
 // ra_compiler/grammar.lark
 // defines the grammar for the relational algebra compiler as described in grammar_syntax.md
 
-start: _expr
+start: list | _expr
 
 _expr: table
     | unary_ops
     | set_ops
-    | join_ops
+    | merge_ops
 
 table: CNAME | "(" _expr ")" | table "->" CNAME
+
+list: "list"i | "/list"i
 
 // ~~~~~~~~ UNARY OPERATIONS ~~~~~~~~ //
 
@@ -78,10 +80,9 @@ DIFFERENCE_PREFIX: "/difference"i
                  | "/diff^d"i
                  | "/subtract^d"i
 
+// ~~~~~~~~ MERGE OPERATIONS ~~~~~~~~ //
 
-// ~~~~~~~~ JOIN OPERATIONS ~~~~~~~~ //
-
-join_ops: cross
+merge_ops: cross
         | join
         | divide
 

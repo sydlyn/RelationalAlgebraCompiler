@@ -57,10 +57,16 @@ def run(save_to_out=False):
             # if something goes wrong handling the query, skip to the next one
             result = handle_query(query, query_counter)
             if result is None:
-                print("An error occurred while processing the query. Please try again.")
                 continue
 
-            # cleanly output the results
+            # if the result is a table list, print our the tables
+            if isinstance(result, list):
+                print("List of tables:")
+                for table in result:
+                    print(f" - {table}")
+                continue
+
+            # otherwise, cleanly output the datafram results
             print("Execution Result:")
             show_dataframe(result.name, result.df)
 
@@ -105,7 +111,11 @@ def handle_query(query, query_count=0):
     if result is None:
         return None
 
-    # reset the index then save the result
+    # if the result is a list, return the list
+    if isinstance(result, list):
+        return result
+
+    # otherwise, reset the index then save the dataframe result
     result.df = result.df.reset_index(drop=True)
     saved_results[result.name] = result
     return result

@@ -120,9 +120,9 @@ class TestHandleQuery(unittest.TestCase):
         self.assertGreater(len(df), 0)
 
     def test_rho_and_join(self):
-        cli.handle_query("(/rho {T1} R)")
-        cli.handle_query("(/rho {T2} T)")
-        df = self._run_and_check("(T1 /join {T1.c = T2.b} T2)", [])
+        cli.handle_query("(/rho {Tab1} R)")
+        cli.handle_query("(/rho {Tab2} T)")
+        df = self._run_and_check("(Tab1 /join {Tab1.c = Tab2.b} Tab2)", [])
         self.assertGreater(len(df), 0)
 
     def test_full_outer_join(self):
@@ -161,7 +161,7 @@ class TestHandleQuery(unittest.TestCase):
             "(R /join {b} T)",
             "((/pi {b, c} R) /join {R.b = T.b} (/pi {b} T))",
             "((/pi {b} R) /join {R.b = T.b} (/pi {age, b} T))",
-            "((/rho {t1} (/pi {b, c} R)) /join {t1.b = t2.b} (/rho {t2} (/pi {b} T)))"
+            "((/rho {tab1} (/pi {b, c} R)) /join {t1.b = t2.b} (/rho {tab2} (/pi {b} T)))"
         ]
         for q in join_queries:
             with self.subTest(query=q):
