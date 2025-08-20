@@ -450,20 +450,8 @@ def exec_join(expr, ndf1, ndf2):
     df2_dr = ndf2.df.reset_index().rename(columns={'index': '_right_id'})
     orig_cols = df1_dr.columns.tolist() + df2_dr.columns.tolist()
 
-    try:
-        # if a condition is specified, use a cross join, otherwise use the specified join
-        # if condition:
-        #     merge_how = 'cross'
-        #     # prepare_for_merge_op(df1_dr, df2_dr)
-        # elif 'semi' in join_type:
-        #     merge_how = 'inner'
-        # else:
-        #     merge_how = join_type
-
-        merge = pd.merge(df1_dr, df2_dr, how='cross',
+    merge = pd.merge(df1_dr, df2_dr, how='cross',
                          suffixes=('_L', '_R'), validate="m:m")
-    except KeyError as e:
-        raise InvalidColumnName(e.args[0]) from e
 
     # get the columns that are from the left and the right dataframes after the join
     left_cols = [c for c in merge.columns if (c in df1_dr.columns or c.endswith('_L'))]
@@ -472,7 +460,10 @@ def exec_join(expr, ndf1, ndf2):
     to_merge_cols = []
     if not condition or attributes:
         # build the condition
-        to_merge_cols = attributes if attributes else list(set(df1_dr.columns) & set(df2_dr.columns))
+        if attributes:
+            to_merge_cols = attributes
+        else:
+            to_merge_cols = list(set(df1_dr.columns) & set(df2_dr.columns))
         condition = build_condition(to_merge_cols)
 
     # if a condition is specified, mask the crossed DataFrame
@@ -483,7 +474,6 @@ def exec_join(expr, ndf1, ndf2):
             mask = pd.Series(condition, index=merge.index)
     else:
         mask = pd.Series(True, index=merge.index)
-
 
     masked = merge[mask]
 
@@ -578,6 +568,7 @@ def handle_outer_join(masked, merge, join_type, left_cols, right_cols):
 
     # align and combine
     out = pd.concat(parts, ignore_index=True)
+    out = out.convert_dtypes()
 
     if "left" in join_type:
         out = out.sort_values(by='_left_id')
