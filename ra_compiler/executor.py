@@ -7,6 +7,7 @@ from .utils import print_error, print_warning
 from .exceptions import TableNotFoundError, TableAlreadyExists, InvalidColumnName
 
 saved_results = {}
+#TODO: split this file into more smaller files
 
 class NamedDataFrame():
     """
@@ -118,7 +119,7 @@ def get_tables(expr):
         # if a list op, return nothing
         case "list":
             return None, None
-        
+
         # if a unary op, get and return the one table
         case "unary":
             ndf = load_table(expr.get("table"))
@@ -311,15 +312,16 @@ def exec_sort(expr, ndf):
     df = ndf.df
     sort_attrs = expr["sort_attributes"]
 
+    # sort in reverse so the first listed attr has the higher sort importance
     for attr in reversed(sort_attrs):
         # ensure the attribute is a valid column in the DataFrame
         col = attr[0]
         if col not in df.columns:
             raise InvalidColumnName(col)
 
-        result_df = df.sort_values(by=col, ascending=attr[1])
+        df = df.sort_values(by=col, ascending=attr[1], na_position="first")
 
-    return NamedDataFrame(expr['table_alias'], result_df)
+    return NamedDataFrame(expr['table_alias'], df)
 
 
 ## ~~~~~~~~ SET OPERATIONS ~~~~~~~~ ##
@@ -441,6 +443,7 @@ def exec_join(expr, ndf1, ndf2):
     join_type = expr["join_type"]
     condition = expr.get("condition")
     attributes = expr.get("attributes")
+    alias = expr.get("table_alias")
 
     # add helper ids to the DataFrames and grab all the columns
     df1_dr = ndf1.df.reset_index().rename(columns={'index': '_left_id'})
@@ -448,16 +451,16 @@ def exec_join(expr, ndf1, ndf2):
     orig_cols = df1_dr.columns.tolist() + df2_dr.columns.tolist()
 
     try:
-        # if no condition is specified, use a cross join, otherwise use the specified join
-        if condition:
-            merge_how = 'cross'
-        elif 'semi' in join_type:
-            merge_how = 'inner'
-        else:
-            merge_how = join_type
+        # if a condition is specified, use a cross join, otherwise use the specified join
+        # if condition:
+        #     merge_how = 'cross'
+        #     # prepare_for_merge_op(df1_dr, df2_dr)
+        # elif 'semi' in join_type:
+        #     merge_how = 'inner'
+        # else:
+        #     merge_how = join_type
 
-        prepare_for_merge_op(df1_dr, df2_dr)
-        merge = pd.merge(df1_dr, df2_dr, how=merge_how, on=attributes,
+        merge = pd.merge(df1_dr, df2_dr, how='cross',
                          suffixes=('_L', '_R'), validate="m:m")
     except KeyError as e:
         raise InvalidColumnName(e.args[0]) from e
@@ -466,28 +469,51 @@ def exec_join(expr, ndf1, ndf2):
     left_cols = [c for c in merge.columns if (c in df1_dr.columns or c.endswith('_L'))]
     right_cols = [c for c in merge.columns if (c in df2_dr.columns or c.endswith('_R'))]
 
-    # if no condition is specified, merge is the result of panda's specialized merge
-    if not condition:
-        result_df = handle_output_cols(merge, join_type, left_cols, right_cols, orig_cols)
-        return clean_join_result(expr, result_df)
+    to_merge_cols = []
+    if not condition or attributes:
+        # build the condition
+        to_merge_cols = attributes if attributes else list(set(df1_dr.columns) & set(df2_dr.columns))
+        condition = build_condition(to_merge_cols)
 
     # if a condition is specified, mask the crossed DataFrame
-    mask = evaluate_comparison_cond(merge, condition)
-    if isinstance(mask, bool):
-        # if the condition is a boolean, return the original DataFrame
-        mask = pd.Series(condition, index=merge.index)
+    if condition:
+        mask = evaluate_comparison_cond(merge, condition)
+        if isinstance(mask, bool):
+            # if the condition is a boolean, return the original DataFrame
+            mask = pd.Series(condition, index=merge.index)
+    else:
+        mask = pd.Series(True, index=merge.index)
+
 
     masked = merge[mask]
 
     checked_dups = handle_output_cols(masked, join_type, left_cols, right_cols, orig_cols)
 
     if "semi" in join_type:
-        return clean_join_result(expr, checked_dups)
+        return clean_join_result(alias, to_merge_cols, checked_dups)
     elif "inner" in join_type:
-        return clean_join_result(expr, masked)
+        return clean_join_result(alias, to_merge_cols, masked)
     else:
         outer_result =  handle_outer_join(masked, merge, join_type, left_cols, right_cols)
-        return clean_join_result(expr, outer_result)
+        return clean_join_result(alias, to_merge_cols, outer_result)
+
+def build_condition(to_merge_cols):
+    if len(to_merge_cols) == 0:
+        return None
+    elif len(to_merge_cols) == 1:
+        return {
+                "type": "comp_cond", 
+                "left": to_merge_cols[0],
+                "op": "=",
+                "right": to_merge_cols[0]
+            }
+    else:
+        return {
+            "type": "comp_cond", 
+            "left": build_condition(to_merge_cols[:-1]),
+            "op": "AND",
+            "right": build_condition(to_merge_cols[-1:])
+        }
 
 def handle_output_cols(merge, join_type, left_cols, right_cols, original_cols):
     """Handle duplicate columns of merged df."""
@@ -560,17 +586,25 @@ def handle_outer_join(masked, merge, join_type, left_cols, right_cols):
 
     return out
 
-def clean_join_result(expr, result_df):
+def clean_join_result(alias, to_merge_cols, result_df):
+
     # drop helper ids
     if '_left_id' in result_df.columns:
         result_df = result_df.drop(columns=['_left_id'])
     if '_right_id' in result_df.columns:
         result_df = result_df.drop(columns=['_right_id'])
 
+    # remove columns that were meant to be merged
+    for col in to_merge_cols:
+        right_col = f"{col}_R"
+        if right_col in result_df.columns:
+            result_df = result_df.drop(f"{col}_R", axis=1)
+            result_df = result_df.rename(columns={f"{col}_L": f"{col}"})
+
     # reset the index
     result_df.reset_index(drop=True, inplace=True)
 
-    return NamedDataFrame(expr["table_alias"], result_df)
+    return NamedDataFrame(alias, result_df)
 
 def exec_divide(expr, ndf1, ndf2):
     """Execute the given divide operation on the given DataFrames."""
@@ -679,7 +713,7 @@ def evaluate_comparison_cond(df, cond):
 
     # if the condition is a boolean, return a full/empty mask
     if isinstance(cond, bool):
-        return pd.Series(cond, index=df.index)
+        return pd.Series(cond, index=df.index, dtype="boolean")
 
     # recursive and/or condition
     if cond["op"] in {"AND", "OR"}:
@@ -706,7 +740,7 @@ def evaluate_comparison_cond(df, cond):
     non_na_idx = ~na_mask
 
     # default rows with NA's to False
-    result = pd.Series(False, index=df.index)
+    result = pd.Series(False, index=df.index, dtype='boolean')
 
     if op == ">":
         result[non_na_idx] = left_val[non_na_idx] > right_val[non_na_idx]

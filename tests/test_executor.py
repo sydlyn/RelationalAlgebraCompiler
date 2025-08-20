@@ -86,7 +86,7 @@ class TestExecutor(unittest.TestCase):
         ndf1 = exe.load_table("T3")
         ndf2 = exe.load_table("T1")
 
-        exe.prepare_cols_for_merge(ndf1.df, ndf2.df)
+        exe.prepare_for_merge_op(ndf1.df, ndf2.df)
 
         expected_left_cols = ["A_L_L", "B_L", "A_R_L", "C"]
         expected_right_cols = ["A_R", "B_R"]
