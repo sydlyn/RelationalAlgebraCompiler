@@ -34,58 +34,64 @@ class NamedDataFrame():
 def execute(expr):
     '''Execute a given relational algebra query and return a NamedDataFrame.'''
 
+    if not expr:
+        raise ValueError("RA expression cannot be empty.")
+
     operation = None
 
     try:
         if not isinstance(expr, dict):
             # if it is a string, assume it is a table name and load the table
-            if isinstance(expr, str):
+            if not isinstance(expr, str):
                 return load_table(expr)
-            else:
-                raise TypeError("RA expression must be a dictionary representing the query.")
+
+            # otherwise, if it is not a dict through an error
+            raise TypeError("RA expression must be a dictionary representing the query.")
 
         # ensure the expression has an operation type
         operation = expr.get("operation", None)
         if operation is None:
             raise ValueError("RA expression must contain 'operation' key.")
 
-        # recursively get the relevant DataFrame(s)
+        # recursively get/evaluate the relevant DataFrame(s)
         ndf, ndf2 = get_tables(expr)
 
         # execute the operation
         match operation:
             # unary operations
             case "projection":
-                return exec_projection(expr, ndf)
+                result = exec_projection(expr, ndf)
             case "selection":
-                return exec_selection(expr, ndf)
+                result = exec_selection(expr, ndf)
             case "group":
-                return exec_group(expr, ndf)
+                result = exec_group(expr, ndf)
             case "rename":
-                return exec_rename(expr, ndf)
+                result = exec_rename(expr, ndf)
             case "remove_duplicates":
-                return exec_remove_duplicates(expr, ndf)
+                result = exec_remove_duplicates(expr, ndf)
             case "sort":
-                return exec_sort(expr, ndf)
+                result = exec_sort(expr, ndf)
 
             # set operations
             case "union":
-                return exec_union(expr, ndf, ndf2)
+                result = exec_union(expr, ndf, ndf2)
             case "intersection":
-                return exec_interestion(expr, ndf, ndf2)
+                result = exec_interestion(expr, ndf, ndf2)
             case "difference":
-                return exec_difference(expr, ndf, ndf2)
+                result = exec_difference(expr, ndf, ndf2)
 
             # join operations
             case "cross":
-                return exec_cross(expr, ndf, ndf2)
+                result = exec_cross(expr, ndf, ndf2)
             case "join":
-                return exec_join(expr, ndf, ndf2)
+                result = exec_join(expr, ndf, ndf2)
             case "divide":
-                return exec_divide(expr, ndf, ndf2)
+                result = exec_divide(expr, ndf, ndf2)
 
             case _:
-                raise ValueError(f"Operation not supported yet: {expr['operation']}")
+                raise ValueError(f"Operation not supported: {expr['operation']}")
+
+        return result
 
     except TableNotFoundError as e:
         print_error(f"Table '{e.table_name}' does not exist in the database.", e)
@@ -100,28 +106,36 @@ def execute(expr):
 def get_tables(expr):
     """Ensure the desired table(s) exist depending on the op_type."""
 
+    # ensure the expression has an op type
     op_type = expr.get("op_type", None)
     if op_type is None:
         raise ValueError("RA expression must contain 'op_type' key.")
 
     match op_type:
+        # if a unary op, get and return the one table
         case "unary":
             ndf = load_table(expr.get("table"))
             return ndf, None
+
+        # if a set op, get and check the two tables
         case "set":
             ndf = load_table(expr.get("table1"))
             ndf2 = load_table(expr.get("table2"))
 
+            # ensure the two tables have the same columns
             if not ndf.df.columns.equals(ndf2.df.columns):
-                raise ValueError("Set operations require both tables to \
-                                 have the same columns in the same order.")
+                raise ValueError("Set operations require both tables to " \
+                                 "have the same columns in the same order.")
 
             return ndf, ndf2
+
+        # if a join op, get and return the two tables
         case "join":
             ndf = load_table(expr.get("table1"))
             ndf2 = load_table(expr.get("table2"))
-
             return ndf, ndf2
+
+        # otherwise, error
         case _:
             raise ValueError(f"Unsupported operation type: {op_type}")
 
@@ -306,7 +320,7 @@ def exec_interestion(expr, df1, df2):
     df1_dr, df2_dr = prepare_for_set_op(df1.df, df2.df, keep_dups)
 
     # merge the data frames and keep only the relevant columns
-    inter = pd.merge(df1_dr, df2_dr)
+    inter = pd.merge(df1_dr, df2_dr, how="inner", on=None, validate="m:m")
     result_df = inter[df1.df.columns]
 
     return NamedDataFrame(expr['table_alias'], result_df)
@@ -318,7 +332,8 @@ def exec_difference(expr, df1, df2):
     df1_dr, df2_dr = prepare_for_set_op(df1.df, df2.df, keep_dups)
 
     # merge the data frames and keep only the relevant columns/rows
-    merged = pd.merge(df1_dr, df2_dr, how="left", indicator=True)
+    merged = pd.merge(df1_dr, df2_dr, how="left", on=None, validate="m:m",
+                      indicator=True)
     diff = merged[merged['_merge'] == 'left_only']
     result_df = diff[df1.df.columns]
 
@@ -369,12 +384,15 @@ def exec_join(expr, ndf1, ndf2):
 
     try:
         # if no condition is specified, use a cross join, otherwise use the specified join
-        merge_how = (
-            'cross' if condition else ('inner' if 'semi' in join_type else join_type)
-        )
-        merge = pd.merge(
-            df1_dr, df2_dr, how=merge_how, on=attributes, suffixes=('_L', '_R')
-        )
+        if condition:
+            merge_how = 'cross'
+        elif 'semi' in join_type:
+            merge_how = 'inner'
+        else:
+            merge_how = join_type
+
+        merge = pd.merge(df1_dr, df2_dr, how=merge_how, on=attributes,
+                         suffixes=('_L', '_R'), validate="m:m")
     except KeyError as e:
         raise InvalidColumnName(e.args[0]) from e
 
@@ -423,9 +441,9 @@ def handle_output_cols(merge, join_type, left_cols, right_cols, original_cols):
     else:
         # print a warning if the output has duplicate columns
         if set(merge.columns) != set(original_cols):
-            print_warning("Duplicate columns found in join. \
-                          Can cause unexpected results. \
-                          Please ensure unique column names across tables.",
+            print_warning("Duplicate columns found in join." \
+                          "Can cause unexpected results." \
+                          "Please ensure unique column names across tables.",
                           "JoinWarning")
         result_df = merge
 
