@@ -1,5 +1,5 @@
 # ra_compiler/cli.py
-'''The command line interface handler. Handles program set up and user input.'''
+"""The command line interface handler. Handles program set up and user input."""
 
 import os
 import argparse
@@ -23,7 +23,7 @@ except ImportError:
 
 
 def main():
-    '''Main entry point for the RACompiler command line interface.'''
+    """Main entry point for the RACompiler command line interface."""
 
     # set up argument parser
     parser = argparse.ArgumentParser()
@@ -34,42 +34,38 @@ def main():
 
     # parse the command line arguments
     args = parser.parse_args()
+    rac_setup(args)
 
+def rac_setup(args):
+    """Set up the database connection and user interface at start up."""
+
+    # set up the sql database connection
     setup_mysql(args.config_file)
-    run(args.out)
 
-def run(save_to_out=False):
-    '''Repeatedly handle user input, parses queries, and displays results.'''
+    # display the start up messages
+    print("\nWelcome to RACompiler!")
+    print("Type 'exit' to quit the application.")
+    print("Type 'help' for a list of supported functions and syntax.")
+
+    # set up for the cli history to view previous queries
+    history_file = ".ra_history"
+    if os.path.exists(history_file):
+        readline.read_history_file(history_file)
+    readline.set_history_length(50)
+    atexit.register(readline.write_history_file, history_file)
+
+    run(save_to_out=args.out)
+
+def run(save_to_out=False, query_counter=0):
+    """Repeatedly handle user input, parses queries, and displays results."""
 
     try:
-        print("\nWelcome to RACompiler!")
-        print("Type 'exit' to quit the application.")
-        print("Type 'help' for a list of supported functions and syntax.")
-
-        # set up for the cli history so that you can view previous queries
-        history_file = ".ra_history"
-        if os.path.exists(history_file):
-            readline.read_history_file(history_file)
-        readline.set_history_length(50)
-        atexit.register(readline.write_history_file, history_file)
-
-        query_counter = 0
         while True:
             # grab user input
             query = input("> ")
 
-            # if the input is an exit command, cleanly exit the application
-            exit_commands = ['exit', 'e', 'quit', 'q']
-            if query.lower().strip(" /,.()") in exit_commands:
-                clean_exit()
-
-            # if the input is a help command, print out the quick reference doc
-            help_commands = ['help', 'h', '-h', '-help']
-            if query.lower().strip(" /,.()") in help_commands:
-                file_path = 'docs/quick_reference.txt2'
-                with open(file_path, 'r', encoding="utf-8") as file:
-                    content = file.read()
-                    print(content)
+            # check if the command was a help/exit request
+            if check_if_help_command(query):
                 continue
 
             # if something goes wrong handling the query, skip to the next one
@@ -101,7 +97,24 @@ def run(save_to_out=False):
         clean_exit()
     except Exception as e:
         print_error(f"An Error Occurred: {e}", e)
-        clean_exit(1)
+        run(query_counter+1)
+
+def check_if_help_command(query):
+    """Handle any 'exit' or 'help' commands. Return true if 'help'."""
+
+    # if the input is an exit command, cleanly exit the application
+    exit_commands = ['exit', 'e', 'quit', 'q']
+    if query.lower().strip(" /,.()") in exit_commands:
+        clean_exit()
+
+    # if the input is a help command, print out the quick reference doc
+    help_commands = ['help', 'h', '-h', '-help']
+    if query.lower().strip(" /,.()") in help_commands:
+        file_path = 'docs/quick_reference.txt'
+        with open(file_path, 'r', encoding="utf-8") as file:
+            content = file.read()
+            print(content)
+        return True
 
 def handle_query(query, query_count=0):
     """Parse, translate, and execute a single query input."""
@@ -140,9 +153,8 @@ def handle_query(query, query_count=0):
     saved_results[result.name] = result
     return result
 
-# pretty print the table
 def show_dataframe(df_name, df):
-    """Print out a pandas DataFrame with a corresponding name."""
+    """Nicely print out a pandas DataFrame with a corresponding name."""
 
     # convert the columns to nullable types for consistency
     df.convert_dtypes()
