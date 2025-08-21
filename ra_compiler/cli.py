@@ -5,6 +5,7 @@ import os
 import argparse
 import pathlib
 import atexit
+import pandas as pd
 from rich.console import Console
 from rich.table import Table
 from .mysql import setup_mysql
@@ -143,11 +144,18 @@ def handle_query(query, query_count=0):
 def show_dataframe(df_name, df):
     """Print out a pandas DataFrame with a corresponding name."""
 
+    # convert the columns to nullable types for consistency
+    df.convert_dtypes()
+
+    # use the rich Console to display the table
     console = Console()
     table = Table(title=df_name)
+
     for col in df.columns:
         table.add_column(col)
     for _, row in df.iterrows():
-        table.add_row(*map(str, row))
-
+        table.add_row(*[
+            "<NA>" if pd.isna(v) else str(v)
+            for v in row
+        ])
     console.print(table)

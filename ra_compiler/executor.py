@@ -162,28 +162,25 @@ def load_table(table_name):
 
     # if the table is a string...
     if isinstance(table_name, str):
+        # check if it is a table from SQL connection
+        if check_sql_for_table(table_name):
+            # if the table exists, load and save it
+            query = f"SELECT * FROM `{table_name}`"
+            cols, rows = run_query(query)
 
-        # check if a saved result
-        if table_name in saved_results:
+            df = pd.DataFrame(rows, columns=cols).convert_dtypes()
+
+        # check if it is a saved result
+        elif table_name in saved_results:
             return saved_results[table_name].copy()
 
-        # or check if it is a table from SQL connection
-        if not check_sql_for_table(table_name):
+        # otherwise, error
+        else:
             raise TableNotFoundError(table_name)
 
-        # if the table exists, load and save it
-        query = f"SELECT * FROM `{table_name}`"
-        cols, rows = run_query(query)
-
-        # set all NULL values to pd.NA
-        cleaned_rows = []
-        for row in rows:
-            cleaned_rows += [[pd.NA if x is None else x for x in row]]
-
-        df = pd.DataFrame(cleaned_rows, columns=cols)
-
+        # saved as a NamedDataFrame and return a copy
         ndf = NamedDataFrame(table_name, df)
-        saved_results[table_name] = ndf
+        # saved_results[table_name] = ndf
 
         return ndf.copy()
 
