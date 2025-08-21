@@ -1,17 +1,22 @@
 # ra_compiler/exceptions.py
-'''Custome exceptions for RACompiler.'''
+'''Custom exceptions for RACompiler.'''
 
-class TableNotFoundError(Exception):
+class RacException(Exception):
+    """Base exception for RACompiler errors."""
+    def __init__(self, message="An error occurred while trying to process the query."):
+        super().__init__(message)
+
+class TableNotFoundError(RacException):
     def __init__(self, table_name=""):
         super().__init__(f"Table '{table_name}' not found.")
         self.table_name = table_name
 
-class TableAlreadyExists(Exception):
+class TableAlreadyExists(RacException):
     def __init__(self, table_name=""):
         super().__init__(f"Table '{table_name}' already exists.")
         self.table_name = table_name
 
-class InvalidColumnName(Exception):
+class InvalidColumnName(RacException):
     def __init__(self, col_name):
         super().__init__(f"Column name '{col_name}' not found in table.")
         self.col_name = col_name

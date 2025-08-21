@@ -4,7 +4,12 @@
 import pandas as pd
 from .mysql import run_query
 from .utils import print_error, print_warning
-from .exceptions import TableNotFoundError, TableAlreadyExists, InvalidColumnName
+from .exceptions import (
+    RacException,
+    TableNotFoundError,
+    TableAlreadyExists,
+    InvalidColumnName
+)
 
 saved_results = {}
 #TODO: split this file into more smaller files
@@ -100,6 +105,8 @@ def execute(expr):
     except TableNotFoundError as e:
         print_error(f"Table '{e.table_name}' does not exist in the database.", e)
         return None
+    except RacException:
+        return None
     except Exception as e:
         if not operation:
             operation = "query"
@@ -183,6 +190,8 @@ def load_table(table_name):
     # otherwise, execute the nested operation
     else:
         ndf = execute(table_name)
+        if not ndf:
+            raise RacException
         return ndf
 
 def check_sql_for_table(table_name):

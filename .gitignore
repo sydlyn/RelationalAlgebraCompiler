@@ -7,3 +7,4 @@ sql/
 csv/
 out/*
 .ra_history
+venv/

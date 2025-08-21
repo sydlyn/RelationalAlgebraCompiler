@@ -17,17 +17,17 @@ RACompiler is a tool to parse and execute relational algebra queries by translat
 ### 1. Clone the repository
 
 ```shell
-git clone https://github.com/sydlyn/RACompiler
+git clone https://github.com/sydlyn/RelationalAlgebraCompiler.git
 cd RACompiler
 ```
 
 
-### 2. (Optional) Create and activate a virtual environment
+### 2. Create and activate a virtual environment
 
 On macOS/Linux: 
 ```shell
 python -m venv venv
-source venv/bin/activate
+source ./venv/bin/activate
 ```
 On Windows: 
 ```shell

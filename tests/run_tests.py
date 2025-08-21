@@ -12,3 +12,6 @@ def main():
     unittest.main(module=None, argv=[
         "unittest", "discover", "-s", "tests", "-p", "test*.py", "-v"
     ])
+
+if __name__ == "__main__":
+    main()
