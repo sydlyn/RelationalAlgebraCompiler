@@ -18,7 +18,7 @@ RACompiler is a tool to parse and execute relational algebra queries by translat
 
 ```shell
 git clone https://github.com/sydlyn/RelationalAlgebraCompiler.git
-cd RACompiler
+cd RelationalAlgebraCompiler
 ```
 
 
@@ -29,6 +29,8 @@ On macOS/Linux:
 python -m venv venv
 source ./venv/bin/activate
 ```
+> Note: you may have to use `python3` or `python3.XX` depending on the version of python that you have installed
+
 On Windows: 
 ```shell
 venv\Scripts\activate
@@ -40,19 +42,31 @@ venv\Scripts\activate
 pip install flit
 flit install --symlink
 ```
+> Note: you may have to use `pip3` or `pip3.XX` depending on the version of pip that you have installed
+
 
 This will install RACompiler in editable mode and register the `rac` command.
 
 ### 4. Configure your database connection
 
-Create a `.env` file in the project root with your MySQL credentials:
-```
+Create a config file in the project root with your MySQL credentials:
+
+```shell
 DB_HOST=your_host  
-DB_PORT=your_port           # defaults to 3306
+DB_PORT=your_port           # optional, defaults to 3306
 DB_USER=your_user  
 DB_PASSWORD=your_password  
 DB_NAME=your_database  
 ```
+
+> By default, RACompiler looks for a config file named `.env` in the project root: `RelationalAlgebraCompiler/.env`  
+> A different file name can be used, but the file must be specified at run time. 
+
+An `example.env` is provided for user reference and can be copied+edited to create the needed config file:
+```
+cp example.env .env
+```
+
 ---
 
 ### Usage
@@ -60,12 +74,19 @@ DB_NAME=your_database
 Run the RACompiler command line interface:
 
 ```shell
-rac
+rac [config-file] [-out] [-h]
 ```
+Positional Arguments:
+- `config-file`: If no config-file is provided, RACompiler will look for `.env` file in the project root: `RelationalAlgebraCompiler/.env`  
+
+Options:
+- `-out`: Creates a CSV file of a saved result to the `out/` folder
+    - *saved results* are considered tables/query results that are renamed with the /rho operation
+- `-h`, `--help`: Show program usage options.
 
 ## Running Tests
 
-Make sure your database is running and accessible.
+Make sure your database is running and accessible and that program functionality is intact.
 
 Run all tests with:
 ```shell
@@ -83,19 +104,23 @@ pytest -q
 ```
 RACompiler/  
 ├── ra_compiler/        # Main package source code  
+│   ├── __main__.py
 │   ├── __init__.py  
 │   ├── cli.py          # Command line interface entry point  
 │   ├── mysql.py        # MySQL connection code  
 │   ├── parser.py       # Query parsing logic  
-│   ├── translator.py   # Query translation to /IR  
+│   ├── translator.py   # Query translation to an intermediate representation  
 │   ├── executor.py     # Query execution  
-│   ├── utils.py        # Helper functions  
+│   ├── utils.py        # Program wide helper functions  
+│   ├── exceptions.py   # Custom program exceptions  
 │   └── grammar.lark    # Query grammar definition  
 ├── tests/              # Test suite  
 │   └── ...             
-├── .env                # MySQL credentials (gitignored)  
+├── .env                # Created by User MySQL credentials (gitignored)
+├── example.env         # Example Config File for MySQL credentials
 ├── pyproject.toml      # Build configuration using flit  
-├── README              # This file  
+├── README.md           # This file  
+├── docs/               # User guides for query syntax and usage
 └── ...
 ```
 

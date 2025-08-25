@@ -2,6 +2,7 @@
 '''Translate the Lark parsed Tree into a dict.'''
 
 from lark import Transformer
+from .utils import print_debug
 
 class RATranslator(Transformer):
     """Transforms a Lark parse tree into a relational algebra representation."""
@@ -24,12 +25,25 @@ class RATranslator(Transformer):
     dup_indicator = "^d"
 
     def start(self, items):
+        if len(items) > 1:
+            return self.unary_ops([self.rename(reversed(items))])
         return items[0]
+
+
+    ## ~~~~~~~~ DATABASE OPERATIONS ~~~~~~~~ ##
+
+    def db_ops(self, items):
+        return { "op_type": "db"} | items[0]
 
     def list(self, _):
         return {
             "operation": "list",
-            "op_type": "list"
+        }
+
+    def drop(self, items):
+        return {
+            "operation": "drop",
+            "table": items[0]
         }
 
     ## ~~~~~~~~ UNARY OPERATIONS ~~~~~~~~ ##
@@ -65,14 +79,6 @@ class RATranslator(Transformer):
             "aggr_cond": aggr_cond,
         })
 
-    def rename(self, items):
-        cname, table = items
-        return {
-            "operation": "rename",
-            "table": table,
-            "table_alias": cname,
-        }
-
     def remove_duplicates(self, items):
         table = items[0]
         return self.add_alias({
@@ -87,6 +93,14 @@ class RATranslator(Transformer):
             "table": table,
             "sort_attributes": sort_attributes,
         })
+    
+    def rename(self, items):
+        cname, table = items
+        return {
+            "operation": "rename",
+            "table": table,
+            "table_alias": cname,
+        }
 
     ## ~~~~~~~~ SET OPERATIONS ~~~~~~~~ ##
 
@@ -187,16 +201,7 @@ class RATranslator(Transformer):
     ## ~~~~~~~~ TABLES, ATTRIBUTES, & OTHER ~~~~~~~~ ##
 
     def table(self, items):
-        if len(items) == 1:
-            return items[0]
-        else:
-            if isinstance(items[0], dict):
-                return items[0] | {
-                    "table_alias": items[1]
-                    }
-            else:
-                return self.unary_ops([self.rename(reversed(items))])
-
+        return items[0]
 
     def attributes(self, attrs):
         return attrs
@@ -316,4 +321,5 @@ class RATranslator(Transformer):
         return token.value
 
     def _ambig(self, options):
+        print_debug("encountered an ambiguous parse")
         return options[0]  # pick the first ambiguous option

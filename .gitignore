@@ -6,5 +6,6 @@ myconfig
 sql/
 csv/
 out/*
-.ra_history
+.rac_cache/*
 venv/
+tests/*.txt

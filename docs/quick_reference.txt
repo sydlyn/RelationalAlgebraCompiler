@@ -9,14 +9,14 @@
 - Group By: group rows by specific columns and perform an aggregation
   => \group {cols; agggregation(col)} table
 
+- Sort: sort the rows on specific columns
+  => \sort {col asc/desc, ...} table
+
 - Rename: rename a table
-  => \rho {new_name} table
+  => \rho (new_name, table)
 
 - Remove Duplicates: remove duplicate rows
   => \delta table
-
-- Sort: sort the rows on specific columns
-  => \sort {col asc/desc, ...} table
 
 - Union: return the rows that are in either table
   => table1 \union table2

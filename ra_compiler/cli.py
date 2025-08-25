@@ -48,7 +48,10 @@ def rac_setup(args):
     print("Type 'help' for a list of supported functions and syntax.")
 
     # set up for the cli history to view previous queries
-    history_file = ".ra_history"
+    history_file = ".rac_cache/ra_history"
+
+    # create the path to the history file if it doesn't exist yet
+    os.makedirs(os.path.dirname(history_file), exist_ok=True)
     if os.path.exists(history_file):
         readline.read_history_file(history_file)
     readline.set_history_length(50)

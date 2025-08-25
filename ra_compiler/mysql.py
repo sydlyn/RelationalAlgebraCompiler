@@ -8,11 +8,10 @@ import mysql.connector
 from .utils import print_error, clean_exit
 
 CONN = None
-CURSOR = None
 
 def setup_mysql(config_file=".env"):
     """Initialize the MySQL connection and cursor."""
-    global CONN, CURSOR
+    global CONN
 
     try:
         print(f"Using configuration file: {config_file}")
@@ -22,8 +21,6 @@ def setup_mysql(config_file=".env"):
             raise FileNotFoundError
 
         CONN = connect()
-
-        CURSOR = CONN.cursor()
 
         print("MySQL Connection Successfully Complete")
 
@@ -43,7 +40,6 @@ def connect():
         if os.getenv(var) is None:
             print_error(f"Missing required mysql config variable: {var}", "MySQLConfigError")
             clean_exit(1)
-
     try:
         return mysql.connector.connect(
             host=os.getenv("DB_HOST"),
@@ -64,25 +60,20 @@ def close_mysql():
         with suppress(Exception):
             CONN.close()
 
-    if CURSOR:
-        with suppress(Exception):
-            CURSOR.close()
-
-
 def run_query(sql):
     """Run a SQL query and return the results."""
 
     # if there is no current connection, set one up
-    if CONN is None or CURSOR is None:
+    if CONN is None:
         setup_mysql()
 
     try:
-        CURSOR.execute(sql)
+        with CONN.cursor() as cursor:
+            cursor.execute(sql)
+            columns = [col[0] for col in cursor.description]
+            rows = cursor.fetchall()
 
-        columns = [col[0] for col in CURSOR.description]
-        rows = CURSOR.fetchall()
-
-        return columns, rows
+            return columns, rows
 
     except mysql.connector.Error as e:
         handle_sql_error(e, sql)

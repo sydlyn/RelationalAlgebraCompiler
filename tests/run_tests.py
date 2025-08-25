@@ -10,7 +10,7 @@ def main():
     sys.path.insert(0, str(root_dir))
 
     unittest.main(module=None, argv=[
-        "unittest", "discover", "-s", "tests", "-p", "test*.py", "-v"
+        "unittest", "discover", "-s", "tests", "-p", "test*.py", "-v", "-f"
     ])
 
 if __name__ == "__main__":

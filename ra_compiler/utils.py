@@ -13,7 +13,7 @@ def print_error(err_msg="", etype="RACError"):
         etype = type(etype).__name__
 
     print(f"\n(RAC-ERR) [{etype}] {err_msg}", file=sys.stderr)
-    print(traceback.format_exc())
+    # print(traceback.format_exc())
 
 def print_warning(warn_msg="", e="RACWarning"):
     '''Print the given warning message.'''

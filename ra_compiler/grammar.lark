@@ -1,16 +1,23 @@
 // ra_compiler/grammar.lark
 // defines the grammar for the relational algebra compiler as described in grammar_syntax.md
 
-start: list | _expr
+start: db_ops | _expr | _expr "->" CNAME
 
 _expr: table
     | unary_ops
     | set_ops
     | merge_ops
 
-table: CNAME | "(" _expr ")" | table "->" CNAME
+table: CNAME | "(" _expr ")"
 
-list: "list"i | "/list"i
+// ~~~~~~~~ DATABASE OPERATIONS ~~~~~~~~ //
+
+db_ops: list
+      | drop
+
+list: "list"i | "/list"i | "(" list ")"
+
+drop: "/drop"i CNAME | "(" drop")"
 
 // ~~~~~~~~ UNARY OPERATIONS ~~~~~~~~ //
 
@@ -24,10 +31,10 @@ unary_ops: projection
 projection: PROJ_PREFIX "{" attributes "}" table
 selection: _SEL_PREFIX "{" comp_cond "}" table
 group: _GROUP_PREFIX "{" attributes ";" aggr_conds "}" table
-rename: _RENAME_PREFIX "{" CNAME "}" _expr
-        | _RENAME_PREFIX "(" CNAME "," _expr ")"
 remove_duplicates: _REMOVE_DUPLICATES_PREFIX table
 sort: _SORT_PREFIX "{" sort_attributes "}" table  
+rename: _RENAME_PREFIX "{" CNAME "}" _expr
+        | _RENAME_PREFIX "(" CNAME "," _expr ")"
 
 PROJ_PREFIX: "/projection"i
            | "/projection^d"i

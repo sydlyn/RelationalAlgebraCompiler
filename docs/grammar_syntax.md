@@ -11,7 +11,6 @@ This is a **relational algebra–focused** language for expressing queries over 
 - Queries can be nested by placing one expression inside another: `(\pi{...} (\selection{...} Table))`
 
 
-
 ## Supported Operations
 
 - Unary Operations: 
@@ -106,22 +105,6 @@ Groups rows by one or more attributes and applies aggregate functions (e.g., `su
 
 ---
 
-### Rename
-
-Renames the result of a table or subquery.
-
-**Valid Keywords Variations**: `\rename`, `\rho`
-
-**Syntax options**:
-```
-(\rename{RenamedTable} Students)
-(\rho{X} (\selection{age > 20} Students))
-```
-
-**Explanation**: Changes the name of the relation for use in further operations.
-
----
-
 ### Remove Duplicates
 
 Removes duplicate rows from a relation.
@@ -153,6 +136,22 @@ Sorts rows by specified attributes in ascending or descending order.
 ```
 
 **Explanation**: Orders the rows based on one or more attributes and directions. Valid directions are `asc` (ascending) and `desc` (descending).
+
+---
+
+### Rename
+
+Renames the result of a table or subquery.
+
+**Valid Keywords Variations**: `\rename`, `\rho`
+
+**Syntax options**:
+```
+(\rename (RenamedTable, Students))
+(\rho (X, (\selection{age > 20} Students)))
+```
+
+**Explanation**: Changes the name of the relation for use in further operations.
 
 ---
 

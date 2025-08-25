@@ -3,7 +3,7 @@
 
 import pandas as pd
 from .mysql import run_query
-from .utils import print_error, print_warning
+from .utils import print_error, print_warning, print_debug
 from .exceptions import (
     RacException,
     TableNotFoundError,
@@ -64,8 +64,11 @@ def execute(expr):
 
         # execute the operation
         match operation:
+            # database ops
             case "list":
                 result = exec_list()
+            case "drop":
+                exec_drop(expr)
 
             # unary ops
             case "projection":
@@ -100,14 +103,12 @@ def execute(expr):
             case _:
                 raise ValueError(f"Operation not supported: {expr['operation']}")
 
-        return result
+        return result if result else None
 
     except TableNotFoundError as e:
         print_error(f"Table '{e.table_name}' does not exist in the database.", e)
         return None
-    except RacException:
-        return None
-    except Exception as e:
+    except (Exception, RacException) as e:
         if not operation:
             operation = "query"
 
@@ -124,7 +125,7 @@ def get_tables(expr):
 
     match op_type:
         # if a list op, return nothing
-        case "list":
+        case "db":
             return None, None
 
         # if a unary op, get and return the one table
@@ -202,8 +203,10 @@ def check_sql_for_table(table_name):
 
     return True
 
+## ~~~~~~~~ DATABASE OPERATIONS ~~~~~~~~ ##
+
 def exec_list():
-    """Return a dict of all available tables."""
+    """Return a list of all available tables."""
     tables = {}
 
     # get all tables from the sql connection
@@ -219,6 +222,18 @@ def exec_list():
 
     return list(tables)
 
+def exec_drop(expr):
+    """Remove a saved result from the list of available tables."""
+
+    table = expr.get("table")
+
+    # ensure that the table is not a table from the SQL connection
+    if check_sql_for_table(table_name=table):
+        raise RacException("Cannot drop table from SQL connection.")
+
+    # if the table cannot be removed or does not exist, error
+    if not saved_results.pop(table, None):
+        raise TableNotFoundError
 
 ## ~~~~~~~~ UNARY OPERATIONS ~~~~~~~~ ##
 
@@ -296,17 +311,6 @@ def exec_group(expr, ndf):
     result_df = group_df.agg(**agg_dict).reset_index()
     return NamedDataFrame(expr['table_alias'], result_df)
 
-def exec_rename(expr, ndf):
-    """Rename the table to the given alias."""
-
-    alias = expr.get("table_alias")
-
-    # check if the alias is in the sql database or is a saved table
-    if check_sql_for_table(alias) or alias in saved_results:
-        raise TableAlreadyExists(alias)
-
-    return NamedDataFrame(alias, ndf.df)
-
 def exec_remove_duplicates(expr, ndf):
     """Remove duplicates from the given DataFrame."""
 
@@ -328,6 +332,17 @@ def exec_sort(expr, ndf):
         df = df.sort_values(by=col, ascending=attr[1], na_position="first")
 
     return NamedDataFrame(expr['table_alias'], df)
+
+def exec_rename(expr, ndf):
+    """Rename the table to the given alias."""
+
+    alias = expr.get("table_alias")
+
+    # check if the alias is in the sql database or is a saved table
+    if check_sql_for_table(alias) or alias in saved_results:
+        raise TableAlreadyExists(alias)
+
+    return NamedDataFrame(alias, ndf.df)
 
 
 ## ~~~~~~~~ SET OPERATIONS ~~~~~~~~ ##
@@ -515,8 +530,8 @@ def handle_output_cols(merge, join_type, left_cols, right_cols, original_cols):
     else:
         # print a warning if the output has duplicate columns
         if set(merge.columns) != set(original_cols):
-            print_warning("Duplicate columns found in join." \
-                          "Can cause unexpected results." \
+            print_warning("Duplicate columns found in join. " \
+                          "Can cause unexpected results. " \
                           "Please ensure unique column names across tables.",
                           "JoinWarning")
         result_df = merge
