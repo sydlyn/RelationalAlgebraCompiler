@@ -88,7 +88,7 @@ def run(save_to_out=False, query_counter=0):
             show_dataframe(result.name, result.df)
 
             # if specified, save the result to a csv file in the out/ folder
-            if save_to_out:
+            if save_to_out and result.save:
                 path = pathlib.Path(f"out/{result.name}.csv").absolute()
                 result.df.to_csv(path, index=False)
 
@@ -170,7 +170,7 @@ def show_dataframe(df_name, df):
         table.add_column(col)
     for _, row in df.iterrows():
         table.add_row(*[
-            "<NA>" if pd.isna(v) else str(v)
+            "NULL" if pd.isna(v) else str(v)
             for v in row
         ])
     console.print(table)

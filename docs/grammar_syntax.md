@@ -17,9 +17,9 @@ This is a **relational algebra–focused** language for expressing queries over 
     - [Projection](#projection)
     - [Selection](#selection)
     - [Group By/Aggregation](#group-by-and-aggregation)
-    - [Rename](#rename)
     - [Remove Duplicates](#remove-duplicates)
     - [Sort](#sort)
+    - [Rename](#rename)
 - Set Operations: 
     - [Union](#union)
     - [Intersection](#intersection)

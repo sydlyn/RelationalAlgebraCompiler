@@ -3,7 +3,7 @@
 
 import pandas as pd
 from .mysql import run_query
-from .utils import print_error, print_warning, print_debug
+from .utils import print_error, print_warning
 from .exceptions import (
     RacException,
     TableNotFoundError,
@@ -23,9 +23,10 @@ class NamedDataFrame():
         df (pd.DataFrame): the corresponding pandas DataFrame  
     """
 
-    def __init__(self, name, df: pd.DataFrame):
+    def __init__(self, name, df: pd.DataFrame, save = False):
         self.name = name
         self.df = df
+        self.save = save
 
     def __repr__(self):
         return f"NamedDataFrame(name={self.name}, shape={self.df.shape})"
@@ -78,12 +79,14 @@ def execute(expr):
                 result = exec_selection(expr, ndf)
             case "group":
                 result = exec_group(expr, ndf)
-            case "rename":
-                result = exec_rename(expr, ndf)
             case "remove_duplicates":
                 result = exec_remove_duplicates(expr, ndf)
             case "sort":
                 result = exec_sort(expr, ndf)
+            case "rename":
+                result = exec_rename(expr, ndf)
+                if isinstance(result, NamedDataFrame):
+                    result.save = True
 
             # set ops
             case "union":

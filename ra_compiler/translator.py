@@ -93,7 +93,7 @@ class RATranslator(Transformer):
             "table": table,
             "sort_attributes": sort_attributes,
         })
-    
+
     def rename(self, items):
         cname, table = items
         return {
