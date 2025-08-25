@@ -194,6 +194,7 @@ OR: "or"i | "||" | "|"
 SORT_DIR: "asc"i | "desc"i
 TRUTH_VAL: "true"i | "false"i | "t"i | "f"i
 STRING: ESCAPED_STRING | "'" _STRING_ESC_INNER "'"
+RENAME_ARROW: "->"
 
 %import common.ESCAPED_STRING
 %import common._STRING_ESC_INNER

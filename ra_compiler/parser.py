@@ -49,7 +49,7 @@ def parse_query(query):
     except lark.exceptions.UnexpectedToken as e:
         handle_unexpected_token(query, e)
     except lark.exceptions.UnexpectedInput as e:
-        print_error(f"{e}", e)
+        handle_unexpected_input(query, e)
     except Exception as e:
         print_error(f"An error occurred during parsing: {e}", e)
         clean_exit(1)
@@ -68,9 +68,8 @@ def clean_query(query):
 
     return query
 
-# print helpful error messages based on the type of unexpected token encountered
 def handle_unexpected_token(query, error):
-    """Handle unexpected token errors."""
+    """Print helpful error message when handling unexpected token errors."""
 
     try:
         # print("~~~~~~~~~~~~~~ UNEXPECTED TOKEN ~~~~~~~~~~~~~~~")
@@ -129,7 +128,6 @@ def handle_unexpected_token(query, error):
         print(f"An error occurred while handling the unexpected token: {e}")
         clean_exit(1)
 
-# parsing utility function to get the token at a specific position in the query
 def get_token_at_pos(query, pos):
     """Get the token at a specific position in the query."""
 
@@ -139,3 +137,21 @@ def get_token_at_pos(query, pos):
             return token
 
     return None
+
+
+def handle_unexpected_input(query, error):
+    """Print helpful error message when handling unexpected input errors."""
+
+    print_error("Error Parsing Query:", "ParseError")
+
+    # print helpful error information
+    print(f"{error.get_context(query)}")
+    print("Please check the syntax of your query.")
+    print("Type 'help' for a list of supported functions.")
+
+
+def print_previous_tokens(query):
+    tokens = list(lark_parser.lex(query))
+
+    for tok in tokens:
+        print(tok)

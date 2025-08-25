@@ -61,6 +61,7 @@ def execute(expr):
 
         # recursively get/evaluate the relevant DataFrame(s) for the operation
         ndf, ndf2 = get_tables(expr)
+        result = None
 
         # execute the operation
         match operation:
@@ -103,7 +104,7 @@ def execute(expr):
             case _:
                 raise ValueError(f"Operation not supported: {expr['operation']}")
 
-        return result if result else None
+        return result
 
     except TableNotFoundError as e:
         print_error(f"Table '{e.table_name}' does not exist in the database.", e)
@@ -223,7 +224,7 @@ def exec_list():
     return list(tables)
 
 def exec_drop(expr):
-    """Remove a saved result from the list of available tables."""
+    """Remove the saved result from the list of available tables."""
 
     table = expr.get("table")
 
@@ -233,7 +234,9 @@ def exec_drop(expr):
 
     # if the table cannot be removed or does not exist, error
     if not saved_results.pop(table, None):
-        raise TableNotFoundError
+        raise TableNotFoundError(table)
+
+    print(f"Successfully dropped table: {table}")
 
 ## ~~~~~~~~ UNARY OPERATIONS ~~~~~~~~ ##
 
