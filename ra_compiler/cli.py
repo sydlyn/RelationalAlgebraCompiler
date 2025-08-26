@@ -57,6 +57,9 @@ def rac_setup(args):
     readline.set_history_length(50)
     atexit.register(readline.write_history_file, history_file)
 
+    if args.out:
+        os.makedirs("out", exist_ok=True)
+
     run(save_to_out=args.out)
 
 def run(save_to_out=False, query_counter=0):

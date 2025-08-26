@@ -13,6 +13,9 @@ This is a **relational algebra–focused** language for expressing queries over 
 
 ## Supported Operations
 
+- Database Operations:
+    - [List](#list)
+    - [Drop](#drop)
 - Unary Operations: 
     - [Projection](#projection)
     - [Selection](#selection)
@@ -33,9 +36,49 @@ This is a **relational algebra–focused** language for expressing queries over 
 
 **Notes on Operation Types**
 
+- Database operations: functions to help manage saved tables
 - Unary operations: operate on a **single table**.
 - Set operations: combine **two tables with the same schema**.
 - Merge operations: combine **two tables**, typically on related keys or conditions.
+
+---
+
+## Database Operations
+
+### List
+
+Shows all available tables that can be used in expressions.
+
+**Valid Keywords Variations**: `\list`, `list`
+
+**Syntax options**:
+```
+list
+\list
+```
+
+**Explanation**:  
+- Returns a list of all currently available tables (both database and in-memory).  
+- Useful to check which relations are accessible at any point.  
+
+---
+
+### Drop
+
+Removes a table from the available list of relations. Can be used to discard intermediate query results or free memory.  
+
+**Valid Keywords Variations**: `\drop`
+
+**Syntax options**:
+```
+(\drop Students)
+(\drop_table TempResults)
+```
+
+**Explanation**:  
+- Deletes the specified table from the working set.  
+- After dropping, the table will no longer appear in `\list`.  
+- This does not delete the original tables from the SQL database — only the in-memory or session copy.  
 
 ---
 
@@ -74,7 +117,7 @@ Filters rows based on a condition.
 **Syntax options**:
 ```
 (\sigma {age > 30} Students)
-(\selection{age > 30, gpa=4.0} Students)
+(\selection{age > 30 and gpa=4.0} Students)
 (\select{name = "Alice"} Employees)
 ```
 

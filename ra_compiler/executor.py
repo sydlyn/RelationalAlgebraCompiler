@@ -351,7 +351,8 @@ def exec_sort(expr, ndf):
         if col not in df.columns:
             raise InvalidColumnName(col)
 
-        df = df.sort_values(by=col, ascending=attr[1], na_position="first")
+        na_position = "first" if attr[1] else "last"
+        df = df.sort_values(by=col, ascending=attr[1], na_position=na_position)
 
     return NamedDataFrame(expr['table_alias'], df)
 
