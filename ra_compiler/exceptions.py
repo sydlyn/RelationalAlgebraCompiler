@@ -6,6 +6,10 @@ class RacException(Exception):
     def __init__(self, message="An error occurred while trying to process the query."):
         super().__init__(message)
 
+class NestedQueryError(RacException):
+    def __init__(self):
+        super().__init__()
+
 class TableNotFoundError(RacException):
     def __init__(self, table_name=""):
         super().__init__(f"Table '{table_name}' not found.")

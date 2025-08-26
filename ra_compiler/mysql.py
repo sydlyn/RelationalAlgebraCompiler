@@ -46,7 +46,8 @@ def connect():
             port=int(os.getenv("DB_PORT", "3306")),
             user=os.getenv("DB_USER"),
             password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME")
+            database=os.getenv("DB_NAME"),
+            autocommit=True
         )
 
     except mysql.connector.Error as e:

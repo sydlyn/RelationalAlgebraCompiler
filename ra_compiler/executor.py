@@ -6,9 +6,10 @@ from .mysql import run_query
 from .utils import print_error, print_warning
 from .exceptions import (
     RacException,
+    NestedQueryError,
     TableNotFoundError,
     TableAlreadyExists,
-    InvalidColumnName
+    InvalidColumnName,
 )
 
 saved_results = {}
@@ -23,22 +24,25 @@ class NamedDataFrame():
         df (pd.DataFrame): the corresponding pandas DataFrame  
     """
 
-    def __init__(self, name, df: pd.DataFrame, save = False):
+    def __init__(self, name, df: pd.DataFrame, save = False, query=None):
         self.name = name
         self.df = df
         self.save = save
+        self.query = query
 
     def __repr__(self):
-        return f"NamedDataFrame(name={self.name}, shape={self.df.shape})"
+        return f"NamedDataFrame(name={self.name}, shape={self.df.shape}, " \
+            f"save={self.save}, query: {self.query})"
 
     def __str__(self):
-        return f"NamedDataFrame: {self.name} (shape: {self.df.shape})"
+        return f"NamedDataFrame(name={self.name}, shape={self.df.shape}) " \
+        f"query: {self.query}"
 
     def copy(self):
         '''Return a copy of the NamedDataFrame.'''
-        return NamedDataFrame(self.name, self.df.copy())
+        return NamedDataFrame(self.name, self.df.copy(), self.save, self.query)
 
-def execute(expr):
+def execute(expr, supress_rename=False):
     '''Execute a given relational algebra query and return a NamedDataFrame.'''
 
     if not expr:
@@ -84,7 +88,7 @@ def execute(expr):
             case "sort":
                 result = exec_sort(expr, ndf)
             case "rename":
-                result = exec_rename(expr, ndf)
+                result = exec_rename(expr, ndf, supress_rename)
                 if isinstance(result, NamedDataFrame):
                     result.save = True
 
@@ -107,16 +111,23 @@ def execute(expr):
             case _:
                 raise ValueError(f"Operation not supported: {expr['operation']}")
 
+        if isinstance(result, NamedDataFrame):
+            result.query = expr
         return result
 
     except TableNotFoundError as e:
         print_error(f"Table '{e.table_name}' does not exist in the database.", e)
         return None
-    except (Exception, RacException) as e:
+    except NestedQueryError:
+        return None
+    except RacException as e:
         if not operation:
             operation = "query"
 
         print_error(f"An error occurred during {operation} execution: {e}", e)
+        return None
+    except Exception as e:
+        print_error(f"{e}", e)
         return None
 
 def get_tables(expr):
@@ -177,7 +188,12 @@ def load_table(table_name):
 
         # check if it is a saved result
         elif table_name in saved_results:
-            return saved_results[table_name].copy()
+            query = saved_results[table_name].query
+            ndf = execute(query, supress_rename=True)
+            if not ndf:
+                raise NestedQueryError
+            return ndf
+            # return saved_results[table_name].copy()
 
         # otherwise, error
         else:
@@ -193,7 +209,7 @@ def load_table(table_name):
     else:
         ndf = execute(table_name)
         if not ndf:
-            raise RacException
+            raise NestedQueryError
         return ndf
 
 def check_sql_for_table(table_name):
@@ -339,13 +355,13 @@ def exec_sort(expr, ndf):
 
     return NamedDataFrame(expr['table_alias'], df)
 
-def exec_rename(expr, ndf):
+def exec_rename(expr, ndf, supress_rename=False):
     """Rename the table to the given alias."""
 
     alias = expr.get("table_alias")
 
     # check if the alias is in the sql database or is a saved table
-    if check_sql_for_table(alias) or alias in saved_results:
+    if not supress_rename and (check_sql_for_table(alias) or alias in saved_results):
         raise TableAlreadyExists(alias)
 
     return NamedDataFrame(alias, ndf.df)
