@@ -480,11 +480,10 @@ def exec_cross(expr, ndf1, ndf2):
 
     return NamedDataFrame(expr["table_alias"], result_df)
 
-
 def exec_join(expr, ndf1, ndf2):
     """Execute the given join operation on the given DataFrames."""
 
-    join_type = expr["join_type"]
+    join_type = expr.get("join_type")
     condition = expr.get("condition")
     attributes = expr.get("attributes")
     alias = expr.get("table_alias")
@@ -494,72 +493,110 @@ def exec_join(expr, ndf1, ndf2):
     df2_dr = ndf2.df.reset_index().rename(columns={'index': '_right_id'})
     orig_cols = df1_dr.columns.tolist() + df2_dr.columns.tolist()
 
-    try:
-        # if no condition is specified, use a cross join, otherwise use the specified join
-        if condition:
-            merge_how = 'cross'
-        elif 'semi' in join_type:
-            merge_how = 'inner'
-        else:
-            merge_how = join_type
+    # if no condition, use pandas specialized merge function
+    if not condition:
+        merge_how = 'inner' if 'semi' in join_type else join_type
+        attributes = attributes or list(set(df1_dr.columns) & set(df2_dr.columns))
 
-        merge = pd.merge(df1_dr, df2_dr, how=merge_how, on=attributes,
-                         suffixes=('_L', '_R'), validate="m:m")
-    except KeyError as e:
-        raise InvalidColumnName(e.args[0]) from e
+        # if an inner or semi join, drop rows with nulls in the join attributes
+        if merge_how == "inner":
+            df1_dr = df1_dr.dropna(subset=attributes)
+            df2_dr = df2_dr.dropna(subset=attributes)
+
+        result, left_cols, right_cols = merge_and_get_cols(
+            df1_dr, df2_dr, merge_how, attributes, indicator=True)
+
+        # if an outer join, handle the case where nulls match
+        if merge_how != "inner":
+            result = fix_null_matches(result, merge_how, df1_dr, df2_dr, attributes)
+
+    # otherwise, if a condition is specified, manually do a cross join and then filter
+    else:
+        merge, left_cols, right_cols = merge_and_get_cols(df1_dr, df2_dr, 'cross')
+
+        # evaulate the condition to get a mask of the wanted rows
+        mask = evaluate_comparison_cond(merge, condition)
+        if isinstance(mask, bool):
+            mask = pd.Series(condition, index=merge.index)
+
+        result = merge[mask]
+
+    # get the desired output columns if a semi join, otherwise check for duplicate names
+    if "semi" in join_type:
+        result = get_semi_join_side(result, join_type, left_cols, right_cols)
+    else:
+        check_merge_col_names(result.columns, orig_cols)
+
+    # if a specialized pandas merge or is not an outer join, return the cleaned result
+    if not condition or "inner" in join_type or "semi" in join_type:
+        return clean_join_result(alias, result)
+
+    outer_result =  handle_outer_join(result, merge, join_type, left_cols, right_cols)
+    return clean_join_result(alias, outer_result)
+
+def merge_and_get_cols(df1_dr, df2_dr, merge_how, attributes=None, indicator=False):
+    merge = pd.merge(df1_dr, df2_dr, how=merge_how, on=attributes,
+                         suffixes=('_L', '_R'), validate="m:m", indicator=indicator)
 
     # get the columns that are from the left and the right dataframes after the join
     left_cols = [c for c in merge.columns if (c in df1_dr.columns or c.endswith('_L'))]
     right_cols = [c for c in merge.columns if (c in df2_dr.columns or c.endswith('_R'))]
 
-    # if no condition is specified, merge is the result of panda's specialized merge
-    if not condition:
-        result_df = handle_output_cols(merge, join_type, left_cols, right_cols, orig_cols)
-        return clean_join_result(alias, result_df)
+    return merge, left_cols, right_cols
 
-    # if a condition is specified, mask the crossed DataFrame
-    mask = evaluate_comparison_cond(merge, condition)
-    if isinstance(mask, bool):
-        # if the condition is a boolean, return the original DataFrame
-        mask = pd.Series(condition, index=merge.index)
+def fix_null_matches(merge, merge_how, df1, df2, attributes):
+    both_null_mask = (merge["_merge"] == "both") & merge[attributes].isna().all(axis=1)
+    rows_to_split = merge.loc[both_null_mask]
 
-    masked = merge[mask]
+    if rows_to_split.empty:
+        return merge.drop(columns=["_merge"])
 
-    checked_dups = handle_output_cols(masked, join_type, left_cols, right_cols, orig_cols)
+    left_cols = df1.columns.tolist()
+    right_cols = df2.columns.tolist()
 
-    if "semi" in join_type:
-        return clean_join_result(alias, checked_dups)
-    elif "inner" in join_type:
-        return clean_join_result(alias, masked)
+    new_rows = []
+    for _, r in rows_to_split.iterrows():
+        if merge_how in ("outer", "left"):
+            new_rows.append(nullify_side(r, right_cols, attributes, "_right_id"))
+        if merge_how in ("outer", "right"):
+            new_rows.append(nullify_side(r, left_cols, attributes, "_left_id"))
+
+    merge = merge.loc[~both_null_mask].copy()
+    merge = pd.concat([merge, pd.DataFrame(new_rows)], ignore_index=True)
+
+    return merge.drop(columns=["_merge"])
+
+def nullify_side(row, cols, attributes, id_col):
+    copy = row.copy()
+    for c in cols:
+        if c not in attributes:
+            copy[c] = pd.NA
+    if id_col in row.index:
+        copy[id_col] = pd.NA
+    return copy
+
+def get_semi_join_side(merge, join_type, left_cols, right_cols):
+    print(merge)
+    if "left" in join_type:
+        result_df = (
+            merge[left_cols].rename(columns=lambda x: x.replace('_L', ''))
+                .drop_duplicates('_left_id')
+        )
     else:
-        outer_result =  handle_outer_join(masked, merge, join_type, left_cols, right_cols)
-        return clean_join_result(alias, outer_result)
-
-def handle_output_cols(merge, join_type, left_cols, right_cols, original_cols):
-    """Handle duplicate columns of merged df."""
-
-    # if a semi-join, only keep the left or right columns
-    if "semi" in join_type:
-        if "left" in join_type:
-            result_df = (
-                merge[left_cols].rename(columns=lambda x: x.replace('_L', ''))
-                    .drop_duplicates('_left_id')
-            )
-        else:
-            result_df = (
-                merge[right_cols].rename(columns=lambda x: x.replace('_R', ''))
-                    .drop_duplicates('_right_id')
-            )
-    else:
-        # print a warning if the output has duplicate columns
-        if set(merge.columns) != set(original_cols):
-            print_warning("Duplicate columns found in join. " \
-                          "Can cause unexpected results. " \
-                          "Please ensure unique column names across tables.",
-                          "JoinWarning")
-        result_df = merge
-
+        result_df = (
+            merge[right_cols].rename(columns=lambda x: x.replace('_R', ''))
+                .drop_duplicates('_right_id')
+        )
     return result_df
+
+def check_merge_col_names(merged_cols, original_cols):
+    """Check if the merged columns are the same columns as the original columns."""
+
+    if set(merged_cols) != set(original_cols):
+        print_warning("Duplicate columns found in result. " \
+                      "Can cause unexpected results. " \
+                      "Please ensure unique column names across tables.",
+                      "JoinWarning")
 
 def handle_outer_join(masked, merge, join_type, left_cols, right_cols):
     """Handle outer join output. Fill unmatched rows with NaN."""
@@ -608,12 +645,15 @@ def handle_outer_join(masked, merge, join_type, left_cols, right_cols):
     return out
 
 def clean_join_result(alias, result_df):
+    """Clean up the join result by dropping helper columns and resetting index."""
 
     # drop helper ids
     if '_left_id' in result_df.columns:
         result_df = result_df.drop(columns=['_left_id'])
     if '_right_id' in result_df.columns:
         result_df = result_df.drop(columns=['_right_id'])
+    if '_merge' in result_df.columns:
+        result_df = result_df.drop(columns=['_merge'])
 
     # reset the index
     result_df.reset_index(drop=True, inplace=True)
