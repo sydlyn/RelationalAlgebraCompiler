@@ -15,9 +15,12 @@ table: CNAME | "(" _expr ")"
 db_ops: list
       | drop
 
-list: "list"i | "/list"i | "(" list ")"
+list: _LIST_PREFIX | "(" list ")"
 
-drop: "/drop"i CNAME | "(" drop")"
+drop: _DROP_PREFIX CNAME | "(" drop")"
+
+_LIST_PREFIX: /(\/)?list(?![a-z])/i
+_DROP_PREFIX: /\/drop(?![a-z])/i
 
 // ~~~~~~~~ UNARY OPERATIONS ~~~~~~~~ //
 
@@ -36,29 +39,17 @@ sort: _SORT_PREFIX "{" sort_attributes "}" table
 rename: _RENAME_PREFIX "{" CNAME "}" _expr
         | _RENAME_PREFIX "(" CNAME "," _expr ")"
 
-PROJ_PREFIX: "/projection"i
-           | "/projection^d"i
-           | "/pi"i
-           | "/pi^d"i
+PROJ_PREFIX: /\/(projection|pi)(\^d)?(?![a-z])/i
 
-_SEL_PREFIX: "/selection"i
-           | "/select"i
-           | "/sigma"i
+_SEL_PREFIX: /\/(selection|select|sigma)(?![a-z])/
 
-_GROUP_PREFIX: "/group_by"i
-             | "/group"i
-             | "/gamma"i
+_GROUP_PREFIX: /\/(group_by|group|gamma)(?![a-z])/
 
-_RENAME_PREFIX: "/rename"i
-             | "/rho"i
+_RENAME_PREFIX: /\/(rename|rho)(?![a-z])/
 
-_REMOVE_DUPLICATES_PREFIX: "/remove_duplicates"i
-                        | "/remove_dups"i
-                        | "/delta"i
+_REMOVE_DUPLICATES_PREFIX: /\/(remove_duplicates|remove_dups|delta)(?![a-z])/
 
-_SORT_PREFIX: "/sort"i
-           | "/order"i
-           | "/tau"i
+_SORT_PREFIX: /\/(sort|order|tau)(?![a-z])/
 
 
 // ~~~~~~~~ SET OPERATIONS ~~~~~~~~ //
@@ -71,22 +62,11 @@ union: table UNION_PREFIX table // ("," table)*
 intersection: table INTERSECT_PREFIX table // ("," table)*
 difference: table DIFFERENCE_PREFIX table // ("," table)*
 
-UNION_PREFIX: "/union"i
-            | "/u"i
-            | "/union^d"i
-            | "/u^d"i
+UNION_PREFIX: /\/(union|u)(\^d)?(?![a-z])/i
 
-INTERSECT_PREFIX: "/intersect"i
-                   | "/inter"i
-                   | "/intersect^d"i
-                   | "/inter^d"i
+INTERSECT_PREFIX: /\/(intersect|inter)(\^d)?(?![a-z])/i
 
-DIFFERENCE_PREFIX: "/difference"i
-                 | "/diff"i
-                 | "/subtract"i
-                 | "/difference^d"i
-                 | "/diff^d"i
-                 | "/subtract^d"i
+DIFFERENCE_PREFIX: /\/(difference|diff|subtract)(\^d)?(?![a-z])/i
 
 // ~~~~~~~~ MERGE OPERATIONS ~~~~~~~~ //
 
@@ -98,50 +78,48 @@ cross: table _CROSS_PREFIX table
 join: table JOIN_PREFIX ("{" (attributes | comp_cond) "}")? table
 divide: table _DIVIDE_PREFIX table
 
-_CROSS_PREFIX: "/cross_product"i
-            | "/cross"i
-            | "/x"i
+_CROSS_PREFIX: /\/(cross_product|cross|x)(?![a-z])/
 
-JOIN_PREFIX: "/left_semi_join"i
-           | "/left_semi_j"i
-           | "/left_semi"i
-           | "/semi_join"i
-           | "/semi_j"i
-           | "/semi"i
-           | "/right_semi_join"i
-           | "/right_semi_j"i
-           | "/right_semi"i
-           | "/inner_join"i
-           | "/inner_j"i
-           | "/inner"i
-           | "/join"i
-           | "/j"i
-           | "/left_outer_join"i
-           | "/left_outer_j"i
-           | "/left_outer"i
-           | "/left_join"i
-           | "/left_j"i
-           | "/left"i
-           | "/right_outer_join"i
-           | "/right_outer_j"i
-           | "/right_outer"i
-           | "/right_join"i
-           | "/right_j"i
-           | "/right"i
-           | "/full_outer_join"i
-           | "/full_outer_j"i
-           | "/full_outer"i
-           | "/full_join"i
-           | "/full_j"i
-           | "/full"i
-           | "/outer_join"i
-           | "/outer_j"i
-           | "/outer"i
+JOIN_PREFIX: /\/(
+    left_semi_join
+  | left_semi_j
+  | left_semi
+  | semi_join
+  | semi_j
+  | semi
+  | right_semi_join
+  | right_semi_j
+  | right_semi
+  | inner_join
+  | inner_j
+  | inner
+  | join
+  | j
+  | left_outer_join
+  | left_outer_j
+  | left_outer
+  | left_join
+  | left_j
+  | left
+  | right_outer_join
+  | right_outer_j
+  | right_outer
+  | right_join
+  | right_j
+  | right
+  | full_outer_join
+  | full_outer_j
+  | full_outer
+  | full_join
+  | full_j
+  | full
+  | outer_join
+  | outer_j
+  | outer
+)(?![a-z])/ix
 
+_DIVIDE_PREFIX: /\/(divide|div)(?![a-z])/
 
-
-_DIVIDE_PREFIX: "/divide"i
-              | "/div"i
 
 // ~~~~~~~~ TABLES, ATTRIBUTES, & OTHER ~~~~~~~~ //
 

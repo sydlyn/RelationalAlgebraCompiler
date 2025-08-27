@@ -3,6 +3,7 @@
 
 import os
 import sys
+import re
 from lark import Lark
 import lark.exceptions
 from .utils import clean_exit, print_error
@@ -17,8 +18,6 @@ try:
     with open(GRAMMAR_PATH, encoding="utf-8") as f:
         grammar_text = f.read()
 
-    #TODO: change to utilize LALR parser
-    # lark_parser = Lark(grammar_text, parser='lalr')
     lark_parser = Lark(grammar_text, parser='earley', ambiguity='explicit')
 
 except FileNotFoundError:
@@ -46,10 +45,13 @@ def parse_query(query):
 
         return parsed
 
-    except lark.exceptions.UnexpectedToken as e:
-        handle_unexpected_token(query, e)
     except lark.exceptions.UnexpectedInput as e:
-        handle_unexpected_input(query, e)
+        err_msg = handle_unexpected_input(query, e)
+        print_error(f"Error Parsing Query: {err_msg}", "ParseError")
+
+        print(f"{e.get_context(query)}")
+        print("Please check the syntax of your query.")
+        print("Type 'help' for a list of supported functions.")
     except Exception as e:
         print_error(f"An error occurred during parsing: {e}", e)
         clean_exit(1)
@@ -68,65 +70,47 @@ def clean_query(query):
 
     return query
 
-def handle_unexpected_token(query, error):
-    """Print helpful error message when handling unexpected token errors."""
+def handle_unexpected_input(query, e):
+    """Return a helpful error message when handling unexpected input errors."""
 
-    try:
-        # print("~~~~~~~~~~~~~~ UNEXPECTED TOKEN ~~~~~~~~~~~~~~~")
+    # print_debug("previous tokens:")
+    # print_previous_tokens(query)
 
-        # print(f"{error}")
+    if isinstance(e, lark.exceptions.UnexpectedEOF):
+        return "Unexpected end of query. Check for missing operators or parentheses."
 
-        # print(f"error.expected: {error.expected}")
-        # print(f"{error.accepts}")
-        # print(error.pos_in_stream)
-        # print(f"Token: {error.token}")
-        # print("%r" % error.token)
+    if isinstance(e, lark.exceptions.UnexpectedCharacters):
+        column = e.column
+        bad_fragment = query[column-1:].split()[0] if query[column-1:].split() else query[column-1]
 
-        # print(error.token_history)
-        # print(list(lark_parser.lex(query)))
-        # for i, token in enumerate(lark_parser.lex(query)):
-        #     print(token.type, token.value, token.start_pos)
-
-
-        # print("~~~~~~~~~~~~~~ UNEXPECTED TOKEN ~~~~~~~~~~~~~~~")
-
-        print_error("Error Parsing Query:", "ParseError")
-
-        # get the tokens that are allowed at the error position
-        allowed = error.accepts or error.expected
-
-        # if the only allowed tokens are parentheses...
-        if allowed in [{'LPAR'}, {'RPAR'}]:
-            print("Missing parentheses.")
-
-        # if an / is used incorrectly,
-        # determine if it is an incorrect operator or a misused division operator
-        elif 'MATH_OP' == error.token.type and error.token == "/":
-            next_tok = get_token_at_pos(query, error.pos_in_stream + 1)
-            if next_tok and next_tok.type == 'CNAME':
-                print(f"Unknown Operator: {error.token}{next_tok.value}")
+        if bad_fragment.startswith("/"):
+            if not check_if_existing_operator(bad_fragment):
+                return f"'{bad_fragment}' is not a valid operation."
             else:
-                print("Division operator '/' is not allowed in this context.")
+                return f"Improper use of '{bad_fragment}' operator."
 
-        # if the end is reached unexpectedly...
-        elif error.token.type == '$END':
-            print("Unexpected end of query. Check for missing operators or parentheses.")
+        if e.char == ")":
+            return "Unmatched paretheses detected."
 
-        # if the end is expected but more tokens are found...
-        elif '$END' in allowed:
-            print("Expected end of query, but found more tokens:", error.token)
+        if {"RENAME_ARROW"} == e.allowed:
+            return f"Unexpected token at the end of the query: '{bad_fragment}'"
 
-        else:
-            print("Unexpected token encountered.")
+    expected = getattr(e, "expected", None)
+    expected = getattr(e, "allowed", None) if not expected else None
+    expected_msg = ""
+    if expected:
+        expected_msg= "\nExpected one of:\n"
+        for s in expected:
+            expected_msg += f"    * {s}\n"
 
-        # print helpful error information
-        print(f"{error.get_context(query)}")
-        print("Please check the syntax of your query.")
-        print("Type 'help' for a list of supported functions.")
+    return f"Invalid query. {expected_msg}"
 
-    except Exception as e:
-        print(f"An error occurred while handling the unexpected token: {e}")
-        clean_exit(1)
+
+def print_previous_tokens(query):
+    tokens = list(lark_parser.lex(query))
+
+    for tok in tokens:
+        print(tok)
 
 def get_token_at_pos(query, pos):
     """Get the token at a specific position in the query."""
@@ -138,20 +122,10 @@ def get_token_at_pos(query, pos):
 
     return None
 
-
-def handle_unexpected_input(query, error):
-    """Print helpful error message when handling unexpected input errors."""
-
-    print_error("Error Parsing Query:", "ParseError")
-
-    # print helpful error information
-    print(f"{error.get_context(query)}")
-    print("Please check the syntax of your query.")
-    print("Type 'help' for a list of supported functions.")
-
-
-def print_previous_tokens(query):
-    tokens = list(lark_parser.lex(query))
-
-    for tok in tokens:
-        print(tok)
+def check_if_existing_operator(fragment):
+    for term in lark_parser.terminals:
+        if term.name.endswith("_PREFIX"):
+            regex = re.compile(term.pattern.to_regexp(), re.IGNORECASE)
+            if regex.fullmatch(fragment):
+                return True
+    return False
