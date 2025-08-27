@@ -30,7 +30,7 @@ unary_ops: projection
 
 projection: PROJ_PREFIX "{" attributes "}" table
 selection: _SEL_PREFIX "{" comp_cond "}" table
-group: _GROUP_PREFIX "{" attributes ";" aggr_conds "}" table
+group: _GROUP_PREFIX "{" (attributes ";")? aggr_conds "}" table
 remove_duplicates: _REMOVE_DUPLICATES_PREFIX table
 sort: _SORT_PREFIX "{" sort_attributes "}" table  
 rename: _RENAME_PREFIX "{" CNAME "}" _expr

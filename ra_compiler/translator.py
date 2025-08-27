@@ -71,7 +71,12 @@ class RATranslator(Transformer):
         })
 
     def group(self, items):
-        attributes, aggr_cond, table = items
+        if len(items) == 2:
+            attributes = []
+            aggr_cond, table = items
+        else:
+            attributes, aggr_cond, table = items
+
         return self.add_alias({
             "operation": "group",
             "table": table,
@@ -277,6 +282,8 @@ class RATranslator(Transformer):
         if aggr_op not in aggr_op_map:
             raise ValueError(f"Unsupported aggregation operator: {aggr_op}")
 
+        if not isinstance(attrs, list):
+            attrs = [attrs]
         return {"aggr": aggr_op_map[aggr_op], "attr": attrs}
 
     def ALL_ATTR(self, _):

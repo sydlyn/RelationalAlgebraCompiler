@@ -287,12 +287,41 @@ def exec_selection(expr, ndf):
 
     return NamedDataFrame(expr['table_alias'], df[mask])
 
+# TODO: refactor this function
 def exec_group(expr, ndf):
     """Execute the given group operation on the given DataFrame."""
 
     df = ndf.df
     group_attrs = process_attributes(df, expr["attributes"])
     aggr_funcs = parse_aggr_conds(expr["aggr_cond"], df)
+
+    if not group_attrs:
+        result_df = pd.DataFrame()
+        for alias, (col, func) in aggr_funcs.items():
+            if func == "size" and col == "*":
+                result = len(df)
+            elif func == "count":
+                # count when EITHER is not null
+                if not isinstance(col, list):
+                    col = [col]
+                mask = ~pd.concat([df[c].isna() for c in col], axis=1).all(axis=1)
+                result = mask.sum()
+            else:
+                if func == "sum":
+                    result = df[col].sum() if df[col].notna().any() else pd.NA
+                elif func == "mean":
+                    result = df[col].mean() if df[col].notna().any() else pd.NA
+                elif func == "min":
+                    result = df[col].min() if df[col].notna().any() else pd.NA
+                elif func == "max":
+                    result = df[col].max() if df[col].notna().any() else pd.NA
+                else:
+                    raise ValueError(f"Unsupported aggregation function: {func}")
+                
+            result_df[alias] = [result]
+        return NamedDataFrame(expr['table_alias'], result_df)
+
+            
 
     group_df = df.groupby(group_attrs, sort=False)
 
@@ -308,12 +337,13 @@ def exec_group(expr, ndf):
 
         elif func == "count":
             # count when EITHER is not null
+            if not isinstance(col, list):
+                col = [col]
             mask = ~pd.concat([df[c].isna() for c in col], axis=1).all(axis=1)
 
             temp_col = f"__mask_{alias}"
             df[temp_col] = mask.astype(int)
 
-            group_df = df.groupby(group_attrs, sort=False)
             agg_dict[alias] = pd.NamedAgg(column=temp_col, aggfunc="sum")
 
         else:
@@ -854,6 +884,7 @@ def parse_aggr_conds(aggr_conds, df):
     """Convert aggr_cond expressions into a dict of output_column -> (col, agg_func)"""
     aggr_funcs = {}
     for aggr in aggr_conds:
+        print(aggr)
         # grab the alias if given one
         if isinstance(aggr, list):
             alias = aggr[1]
@@ -864,6 +895,7 @@ def parse_aggr_conds(aggr_conds, df):
         op = aggr["aggr"].lower()
         attr = aggr.get("attr", "*")
         attrs = process_attributes(df, attr)
+        print(attr, attrs)
 
         # Special handling for count(*)
         if op == "count" and attr == ["*"]:
@@ -871,6 +903,7 @@ def parse_aggr_conds(aggr_conds, df):
             aggr_funcs[alias] = ("*", "size")
         else:
             alias = alias if alias else f"{op}_{'_'.join(attrs)}"
-            aggr_funcs[alias] = (attr, op)
+            aggr_funcs[alias] = (attr[0], op)
 
+    print(aggr_funcs)
     return aggr_funcs
