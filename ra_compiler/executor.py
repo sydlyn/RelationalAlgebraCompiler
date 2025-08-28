@@ -295,73 +295,96 @@ def exec_group(expr, ndf):
     group_attrs = process_attributes(df, expr["attributes"])
     aggr_funcs = parse_aggr_conds(expr["aggr_cond"], df)
 
+    # if not given any grouping attributes, aggregate over the whole table
     if not group_attrs:
-        result_df = pd.DataFrame()
-        for alias, (col, func) in aggr_funcs.items():
-            if func == "size" and col == "*":
-                result = len(df)
-            elif func == "count":
-                # count when EITHER is not null
-                if not isinstance(col, list):
-                    col = [col]
-                mask = ~pd.concat([df[c].isna() for c in col], axis=1).all(axis=1)
-                result = mask.sum()
-            else:
-                if func == "sum":
-                    result = df[col].sum() if df[col].notna().any() else pd.NA
-                elif func == "mean":
-                    result = df[col].mean() if df[col].notna().any() else pd.NA
-                elif func == "min":
-                    result = df[col].min() if df[col].notna().any() else pd.NA
-                elif func == "max":
-                    result = df[col].max() if df[col].notna().any() else pd.NA
-                else:
-                    raise ValueError(f"Unsupported aggregation function: {func}")
-                
-            result_df[alias] = [result]
+        result_df = exec_agg_without_group(df, aggr_funcs)
         return NamedDataFrame(expr['table_alias'], result_df)
-
-            
 
     group_df = df.groupby(group_attrs, sort=False)
 
     # construct aggregation mapping for pandas
     agg_dict = {}
-    for alias, (col, func) in aggr_funcs.items():
-
+    for alias, (col, func, distinct) in aggr_funcs.items():
         # when count by *, return how many rows are in each group
         if func == "size" and col == "*":
-            temp_col = "__count_star_temp"
-            df[temp_col] = 1
-            agg_dict[alias] = pd.NamedAgg(column=temp_col, aggfunc=func)
+            temp_col = f"__mask_{alias}"
+            if distinct:
+                valid_rows = df.notna().any(axis=1)
+                mask = valid_rows & (~df[valid_rows].duplicated(keep="first"))
+            else:
+                mask = df.notna().any(axis=1)
+
+            df[temp_col] = mask.astype(int)
+            agg_dict[alias] = pd.NamedAgg(column=temp_col, aggfunc="sum")
 
         elif func == "count":
-            # count when EITHER is not null
-            if not isinstance(col, list):
-                col = [col]
-            mask = ~pd.concat([df[c].isna() for c in col], axis=1).all(axis=1)
-
             temp_col = f"__mask_{alias}"
-            df[temp_col] = mask.astype(int)
 
+            if distinct:
+                valid_rows = ~pd.concat([df[c].isna() for c in col], axis=1).all(axis=1)
+                mask = valid_rows & (~df[valid_rows].duplicated(subset=col, keep="first"))
+            else:
+                # count when EITHER is not null
+                mask = ~pd.concat([df[c].isna() for c in col], axis=1).all(axis=1)
+
+            df[temp_col] = mask.astype(int)
             agg_dict[alias] = pd.NamedAgg(column=temp_col, aggfunc="sum")
 
         else:
-            if func == "sum":
-                agg_func = lambda x: x.sum() if x.notna().any() else pd.NA
-            elif func == "mean":
-                agg_func = lambda x: x.mean() if x.notna().any() else pd.NA
-            elif func == "min":
-                agg_func = lambda x: x.min() if x.notna().any() else pd.NA
-            elif func == "max":
-                agg_func = lambda x: x.max() if x.notna().any() else pd.NA
-            else:
-                raise ValueError(f"Unsupported aggregation function: {func}")
-
+            agg_func = make_agg_func(func, distinct)
             agg_dict[alias] = pd.NamedAgg(column=col, aggfunc=agg_func)
 
     result_df = group_df.agg(**agg_dict).reset_index()
     return NamedDataFrame(expr['table_alias'], result_df)
+
+def exec_agg_without_group(orig_df, aggr_funcs):
+    result_df = pd.DataFrame()
+    for alias, (col, func, distinct) in aggr_funcs.items():
+        if distinct and col != "*":
+            df = orig_df.drop_duplicates(subset=col)
+        elif distinct:
+            df = orig_df.drop_duplicates()
+        else:
+            df = orig_df
+
+        if func == "size" and col == "*":
+            result = df.notna().any(axis=1).sum()
+        elif func == "count":
+            mask = ~pd.concat([df[c].isna() for c in col], axis=1).all(axis=1)
+            result = mask.sum()
+        elif func == "sum":
+            result = df[col].sum() if df[col].notna().any() else pd.NA
+        elif func == "mean":
+            result = df[col].mean() if df[col].notna().any() else pd.NA
+        elif func == "min":
+            result = df[col].min() if df[col].notna().any() else pd.NA
+        elif func == "max":
+            result = df[col].max() if df[col].notna().any() else pd.NA
+        else:
+            raise ValueError(f"Unsupported aggregation function: {func}")
+
+        result_df[alias] = [result]
+    return result_df
+
+def make_agg_func(func, distinct=False):
+    """Return a pandas aggregation function for the given operation and distinct flag."""
+
+    def agg(x):
+        values = x.drop_duplicates() if distinct else x
+        if not values.notna().any():
+            return pd.NA
+        if func == "sum":
+            return values.sum()
+        elif func == "mean":
+            return values.mean()
+        elif func == "min":
+            return values.min()
+        elif func == "max":
+            return values.max()
+        else:
+            raise ValueError(f"Unsupported aggregation function: {func}")
+    
+    return agg
 
 def exec_remove_duplicates(expr, ndf):
     """Remove duplicates from the given DataFrame."""
@@ -882,9 +905,9 @@ def process_attributes(df, attributes_expr):
 
 def parse_aggr_conds(aggr_conds, df):
     """Convert aggr_cond expressions into a dict of output_column -> (col, agg_func)"""
+
     aggr_funcs = {}
     for aggr in aggr_conds:
-        print(aggr)
         # grab the alias if given one
         if isinstance(aggr, list):
             alias = aggr[1]
@@ -893,17 +916,22 @@ def parse_aggr_conds(aggr_conds, df):
             alias = None
 
         op = aggr["aggr"].lower()
-        attr = aggr.get("attr", "*")
+        attr = aggr.get("attr", ["*"])
         attrs = process_attributes(df, attr)
-        print(attr, attrs)
+        distinct = aggr.get("distinct", False)
+        
+        distinct_alias = "_^d" if distinct else ""
 
         # Special handling for count(*)
         if op == "count" and attr == ["*"]:
-            alias = alias if alias else "count_star"
-            aggr_funcs[alias] = ("*", "size")
+            alias = alias if alias else f"count_star{distinct_alias}"
+            aggr_funcs[alias] = ("*", "size", distinct)
+        elif op == "count":
+            alias = alias if alias else f"count_{'_'.join(attrs)}{distinct_alias}"
+            aggr_funcs[alias] = (attr, op, distinct)
         else:
-            alias = alias if alias else f"{op}_{'_'.join(attrs)}"
-            aggr_funcs[alias] = (attr[0], op)
+            alias = alias if alias else f"{op}_{'_'.join(attrs)}{distinct_alias}"
+            aggr_funcs[alias] = (attr[0], op, distinct)
 
     print(aggr_funcs)
     return aggr_funcs

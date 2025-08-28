@@ -269,7 +269,11 @@ class RATranslator(Transformer):
             raise ValueError("Invalid aggregation condition format")
 
     def aggr_func(self, items):
-        aggr_op, attrs = items
+        if len(items) == 2:
+            aggr_op, attrs = items
+            distinct = False
+        else:
+            aggr_op, distinct, attrs = items
 
         aggr_op_map = {
             "sum": "sum",
@@ -284,7 +288,11 @@ class RATranslator(Transformer):
 
         if not isinstance(attrs, list):
             attrs = [attrs]
-        return {"aggr": aggr_op_map[aggr_op], "attr": attrs}
+        return {
+            "aggr": aggr_op_map[aggr_op], 
+            "distinct": distinct, 
+            "attr": attrs
+        }
 
     def ALL_ATTR(self, _):
         return "*"
@@ -317,6 +325,9 @@ class RATranslator(Transformer):
             return False
         else:
             raise ValueError(f"Invalid truth value: {token.value}")
+
+    def DISTINCT(self, _):
+        return True
 
     def CNAME(self, token):
         return token.value

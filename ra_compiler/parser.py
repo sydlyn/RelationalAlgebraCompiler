@@ -90,7 +90,7 @@ def handle_unexpected_input(query, e):
                 return f"Improper use of '{bad_fragment}' operator."
 
         if e.char == ")":
-            return "Unmatched paretheses detected."
+            return "Incomplete expression within parentheses or unmatched paretheses detected."
 
         if {"RENAME_ARROW"} == e.allowed:
             return f"Unexpected token at the end of the query: '{bad_fragment}'"

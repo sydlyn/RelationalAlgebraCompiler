@@ -159,8 +159,8 @@ _comp_term: attr
 
 aggr_conds: aggr_term ("," aggr_term)*
 aggr_term: aggr_func ("->" CNAME)?
-aggr_func: AGGR_OP "(" attr ")"
-         | COUNT_OP "(" attributes ")"
+aggr_func: AGGR_OP "(" DISTINCT? attr ")"
+         | COUNT_OP "(" DISTINCT? attributes ")"
 
 ALL_ATTR: "*"
 MATH_OP: "+" | "-" | "*" | "/" | "%" | "^"
@@ -172,6 +172,7 @@ OR: "or"i | "||" | "|"
 SORT_DIR: "asc"i | "desc"i
 TRUTH_VAL: "true"i | "false"i | "t"i | "f"i
 STRING: ESCAPED_STRING | "'" _STRING_ESC_INNER "'"
+DISTINCT: "distinct"i | "^d"i
 RENAME_ARROW: "->"
 
 %import common.ESCAPED_STRING
