@@ -9,12 +9,10 @@ class RATranslator(Transformer):
 
     def __init__(self, query_count):
         super().__init__()
-        self.alias_counter = 0
         self.query_count = query_count
 
     def _new_alias(self):
-        alias = f"_rac_q{self.query_count}_t{self.alias_counter}"
-        self.alias_counter += 1
+        alias = f"_rac_q{self.query_count}"
         return alias
 
     def add_alias(self, expr):
@@ -327,6 +325,9 @@ class RATranslator(Transformer):
             raise ValueError(f"Invalid truth value: {token.value}")
 
     def DISTINCT(self, _):
+        return True
+
+    def ALL(self, _):
         return True
 
     def CNAME(self, token):

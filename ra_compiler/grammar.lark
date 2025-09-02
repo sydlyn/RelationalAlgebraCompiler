@@ -17,7 +17,7 @@ db_ops: list
 
 list: _LIST_PREFIX | "(" list ")"
 
-drop: _DROP_PREFIX CNAME | "(" drop")"
+drop: _DROP_PREFIX (CNAME | ALL) | "(" drop ")"
 
 _LIST_PREFIX: /(\/)?list(?![a-z])/i
 _DROP_PREFIX: /\/drop(?![a-z])/i
@@ -58,9 +58,9 @@ set_ops: union
        | intersection
        | difference
 
-union: table UNION_PREFIX table // ("," table)*
-intersection: table INTERSECT_PREFIX table // ("," table)*
-difference: table DIFFERENCE_PREFIX table // ("," table)*
+union: table UNION_PREFIX table
+intersection: table INTERSECT_PREFIX table
+difference: table DIFFERENCE_PREFIX table
 
 UNION_PREFIX: /\/(union|u)(\^d)?(?![a-z])/i
 
@@ -128,7 +128,6 @@ attributes: attr ("," attr)*
 sort_attributes: sort_attr ("," sort_attr)*
 sort_attr: attr SORT_DIR
 
-// TODO: clean error message for when math)cond doesn't have alias names
 ?attr: math_cond "->" CNAME
         | alias_attr
         | _table_attr
@@ -137,14 +136,11 @@ _table_attr: CNAME ("." CNAME)?
 alias_attr: CNAME "->" CNAME
 
 ?math_cond: math_term MATH_OP math_term
-        //   | math_cond MATH_OP math_term
           | "(" math_cond ")"
-        //   | math_term
-          // TODO: test to make sure ^ wont break if 2->col2?
 
 ?math_term: _table_attr
           | NUMBER
-          | math_cond // ?
+          | math_cond
 
 comp_cond: TRUTH_VAL 
          | _comp_term COMP_OP _comp_term
@@ -173,6 +169,7 @@ SORT_DIR: "asc"i | "desc"i
 TRUTH_VAL: "true"i | "false"i | "t"i | "f"i
 STRING: ESCAPED_STRING | "'" _STRING_ESC_INNER "'"
 DISTINCT: "distinct"i | "^d"i
+ALL: "-all"i
 RENAME_ARROW: "->"
 
 %import common.ESCAPED_STRING

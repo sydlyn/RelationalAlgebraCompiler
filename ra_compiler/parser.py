@@ -92,8 +92,11 @@ def handle_unexpected_input(query, e):
         if e.char == ")":
             return "Incomplete expression within parentheses or unmatched paretheses detected."
 
-        if {"RENAME_ARROW"} == e.allowed:
-            return f"Unexpected token at the end of the query: '{bad_fragment}'"
+        if "RENAME_ARROW" in e.allowed:
+            if "MATH_OP" in e.allowed:
+                return "Expected a column alias using '->' for altered column expressions."
+            else:
+                return f"Unexpected token at the end of the query: '{bad_fragment}'"
 
     expected = getattr(e, "expected", None)
     expected = getattr(e, "allowed", None) if not expected else None

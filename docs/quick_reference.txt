@@ -1,4 +1,10 @@
-~~~ RACompiler Quick Reference ~~~
+~~~ RAC Quick Reference ~~~
+
+- List: list the availble tables and virtual views
+  => list
+
+- Drop: remove a saved virtual view from the usable list of relations
+  => \drop table
 
 - Projection: select specific columns
   => \pi {col1[, col2, ...] | *} table

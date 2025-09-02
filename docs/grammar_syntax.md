@@ -1,4 +1,4 @@
-# Relational Algebra Compiler Syntax
+# Relational Algebra Interpreter Syntax
 
 ## Overview
 
@@ -36,7 +36,7 @@ This is a **relational algebra–focused** language for expressing queries over 
 
 **Notes on Operation Types**
 
-- Database operations: functions to help manage saved tables
+- Database operations: functions to help manage saved virtual views and available tables.
 - Unary operations: operate on a **single table**.
 - Set operations: combine **two tables with the same schema**.
 - Merge operations: combine **two tables**, typically on related keys or conditions.
@@ -47,7 +47,7 @@ This is a **relational algebra–focused** language for expressing queries over 
 
 ### List
 
-Shows all available tables that can be used in expressions.
+Shows all available tables and virtual views that can be used in expressions.
 
 **Valid Keywords Variations**: `\list`, `list`
 
@@ -58,27 +58,29 @@ list
 ```
 
 **Explanation**:  
-- Returns a list of all currently available tables (both database and in-memory).  
+- Returns a list of all currently available tables from the SQL database and stored virtual views.  
 - Useful to check which relations are accessible at any point.  
 
 ---
 
 ### Drop
 
-Removes a table from the available list of relations. Can be used to discard intermediate query results or free memory.  
+Removes a virtual view from the available list of relations. Can be used to discard intermediate query results or free memory.  
 
 **Valid Keywords Variations**: `\drop`
 
 **Syntax options**:
 ```
 (\drop Students)
-(\drop_table TempResults)
+(\drop _rac_q1)
+(\drop -all)
 ```
 
 **Explanation**:  
-- Deletes the specified table from the working set.  
+- Deletes the specified virtual view from the working set.  
 - After dropping, the table will no longer appear in `\list`.  
-- This does not delete the original tables from the SQL database — only the in-memory or session copy.  
+- This does not delete the original tables from the SQL database, only the virtual views created during the session.  
+- `-all` can be used to remove all saved virtual views and previous query results.
 
 ---
 
@@ -137,7 +139,8 @@ Groups rows by one or more attributes and applies aggregate functions (e.g., `su
 ```
 (\group{dept; count(*), avg(salary)} Employees)
 (\group_by{name; sum(score)} Results)
-(\gamma{category; max(price)} Products)
+(\gamma{category; max(price) -> top_price} Products)
+(\gamma{category; max(price), avg(distinct print)} Products)
 ```
 
 **Explanation**:
@@ -145,6 +148,8 @@ Groups rows by one or more attributes and applies aggregate functions (e.g., `su
 - The part after the `;` contains aggregation expressions.
 - Aggregates can include `count`, `sum`, `avg`, `min`, and `max`.
     - `count(*)` can be used to count all unique grouped-by rows
+    - `distinct` can be used to only include unique values per aggregate 
+    - `->` can be used after an aggregate to rename the resulting column
 
 ---
 
@@ -184,7 +189,7 @@ Sorts rows by specified attributes in ascending or descending order.
 
 ### Rename
 
-Renames the result of a table or subquery.
+Creates a temporary virtual view of the query.
 
 **Valid Keywords Variations**: `\rename`, `\rho`
 
@@ -194,7 +199,7 @@ Renames the result of a table or subquery.
 (\rho (X, (\selection{age > 20} Students)))
 ```
 
-**Explanation**: Changes the name of the relation for use in further operations.
+**Explanation**: Creates a temporary virtual view of the query to use in further operations. Will store the query, rather than the table itself, so changes made to the tables used in the queries will reflect in the virtual view. All saved virtual views will be wiped at the end of the session.
 
 ---
 

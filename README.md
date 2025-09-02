@@ -1,8 +1,8 @@
-# RACompiler - *Relational Algebra Compiler*
+# RAC - *Relational Algebra Interpreter*
 
 ### Overview
 
-RACompiler is a tool to parse and execute relational algebra queries by translating them into SQL and running against a MySQL database.
+RAC is a tool to parse and execute relational algebra queries by translating them into SQL and running against a MySQL database.
 
 
 ### Requirements
@@ -45,7 +45,7 @@ flit install --symlink
 > Note: you may have to use `pip3` or `pip3.XX` depending on the version of pip that you have installed
 
 
-This will install RACompiler in editable mode and register the `rac` command.
+This will install RAC in editable mode and register the `rac` command.
 
 ### 4. Configure your database connection
 
@@ -59,7 +59,7 @@ DB_PASSWORD=your_password
 DB_NAME=your_database  
 ```
 
-> By default, RACompiler looks for a config file named `.env` in the project root: `RelationalAlgebraCompiler/.env`  
+> By default, RAC looks for a config file named `.env` in the project root: `RelationalAlgebraCompiler/.env`  
 > A different file name can be used, but the file must be specified at run time. 
 
 An `example.env` is provided for user reference and can be copied+edited to create the needed config file:
@@ -71,13 +71,13 @@ cp example.env .env
 
 ### Usage
 
-Run the RACompiler command line interface:
+Run the RAC command line interface:
 
 ```shell
 rac [config-file] [-out] [-h]
 ```
 Positional Arguments:
-- `config-file`: If no config-file is provided, RACompiler will look for `.env` file in the project root: `RelationalAlgebraCompiler/.env`  
+- `config-file`: If no config-file is provided, RAC will look for `.env` file in the project root: `RelationalAlgebraCompiler/.env`  
 
 Options:
 - `-out`: Creates a CSV file of a saved result to the `out/` folder
@@ -102,7 +102,7 @@ pytest -q
 
 ### Project Structure
 ```
-RACompiler/  
+RAC/  
 ├── ra_compiler/        # Main package source code  
 │   ├── __main__.py
 │   ├── __init__.py  

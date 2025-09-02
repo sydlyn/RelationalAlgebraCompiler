@@ -247,6 +247,12 @@ def exec_drop(expr):
 
     table = expr.get("table")
 
+    # if flagged to drop all, clear the saved results
+    if isinstance(table, bool) and table:
+        saved_results.clear()
+        print("Successfully dropped all saved tables.")
+        return
+
     # ensure that the table is not a table from the SQL connection
     if check_sql_for_table(table_name=table):
         raise RacException("Cannot drop table from SQL connection.")
