@@ -287,7 +287,6 @@ def exec_selection(expr, ndf):
 
     return NamedDataFrame(expr['table_alias'], df[mask])
 
-# TODO: refactor this function
 def exec_group(expr, ndf):
     """Execute the given group operation on the given DataFrame."""
 
@@ -322,7 +321,8 @@ def exec_group(expr, ndf):
 
             if distinct:
                 valid_rows = ~pd.concat([df[c].isna() for c in col], axis=1).all(axis=1)
-                mask = valid_rows & (~df[valid_rows].duplicated(subset=col, keep="first"))
+                group_cols = group_attrs + col
+                mask = valid_rows & (~df[valid_rows].duplicated(subset=group_cols, keep="first"))
             else:
                 # count when EITHER is not null
                 mask = ~pd.concat([df[c].isna() for c in col], axis=1).all(axis=1)
@@ -383,7 +383,7 @@ def make_agg_func(func, distinct=False):
             return values.max()
         else:
             raise ValueError(f"Unsupported aggregation function: {func}")
-    
+
     return agg
 
 def exec_remove_duplicates(expr, ndf):
@@ -487,6 +487,12 @@ def prepare_for_set_op(df1, df2, keep_dups=False):
 
 ## ~~~~~~~~ MERGE OPERATIONS ~~~~~~~~ ##
 
+def strip_suffixes(col):
+    # strip all trailing _L or _R occurrences
+    while col.endswith(("_L", "_R")):
+        col = col[:-2]
+    return col
+
 def prepare_for_merge_op(left_df, right_df):
     """Ensure no duplicate column names between left_df and right_df.
     Adds _L or _R suffixes to duplicates, preserving any existing suffixes."""
@@ -494,12 +500,6 @@ def prepare_for_merge_op(left_df, right_df):
     # grab the original columns from each table
     left_cols = left_df.columns.tolist()
     right_cols = right_df.columns.tolist()
-
-    def strip_suffixes(col):
-        # strip all trailing _L or _R occurrences
-        while col.endswith(("_L", "_R")):
-            col = col[:-2]
-        return col
 
     # remove any existing _L/_R suffixes to get the base column name
     left_bases = [strip_suffixes(c) for c in left_cols]
@@ -526,10 +526,13 @@ def exec_cross(expr, ndf1, ndf2):
 
     df1 = ndf1.df
     df2 = ndf2.df
+    orig_cols = df1.columns.tolist() + df2.columns.tolist()
 
     prepare_for_merge_op(df1, df2)
     result_df = pd.merge(df1, df2, how="cross",
                          suffixes=('_L', '_R'), validate="m:m")
+
+    check_merge_col_names(result_df.columns, orig_cols)
 
     return NamedDataFrame(expr["table_alias"], result_df)
 
@@ -544,7 +547,7 @@ def exec_join(expr, ndf1, ndf2):
     # add helper ids to the DataFrames and grab all the columns
     df1_dr = ndf1.df.reset_index().rename(columns={'index': '_left_id'})
     df2_dr = ndf2.df.reset_index().rename(columns={'index': '_right_id'})
-    orig_cols = df1_dr.columns.tolist() + df2_dr.columns.tolist()
+    orig_cols = df1_dr.columns.tolist() + df2_dr.columns.tolist() + ['_merge']
 
     # if no condition, use pandas specialized merge function
     if not condition:
@@ -557,7 +560,7 @@ def exec_join(expr, ndf1, ndf2):
             df2_dr = df2_dr.dropna(subset=attributes)
 
         result, left_cols, right_cols = merge_and_get_cols(
-            df1_dr, df2_dr, merge_how, attributes, indicator=True)
+            df1_dr, df2_dr, merge_how, attributes)
 
         # if an outer join, handle the case where nulls match
         if merge_how != "inner":
@@ -587,9 +590,15 @@ def exec_join(expr, ndf1, ndf2):
     outer_result =  handle_outer_join(result, merge, join_type, left_cols, right_cols)
     return clean_join_result(alias, outer_result)
 
-def merge_and_get_cols(df1_dr, df2_dr, merge_how, attributes=None, indicator=False):
+def merge_and_get_cols(df1_dr, df2_dr, merge_how, attributes=None):
+    if attributes is not None and len(attributes) == 0:
+        raise ValueError("No common attributes found between tables.")
+
+    if attributes is None:
+        prepare_for_merge_op(df1_dr, df2_dr)
+
     merge = pd.merge(df1_dr, df2_dr, how=merge_how, on=attributes,
-                         suffixes=('_L', '_R'), validate="m:m", indicator=indicator)
+                         suffixes=('_L', '_R'), validate="m:m", indicator=True)
 
     # get the columns that are from the left and the right dataframes after the join
     left_cols = [c for c in merge.columns if (c in df1_dr.columns or c.endswith('_L'))]
@@ -629,7 +638,6 @@ def nullify_side(row, cols, attributes, id_col):
     return copy
 
 def get_semi_join_side(merge, join_type, left_cols, right_cols):
-    print(merge)
     if "left" in join_type:
         result_df = (
             merge[left_cols].rename(columns=lambda x: x.replace('_L', ''))
@@ -783,10 +791,15 @@ def resolve_operand(df, operand, left=True):
                 return operand.strip('"\'')
 
             # if a string is a column name, return the column
-            join_name = operand + "_L" if left else operand + "_R"
-            if join_name in df:
-                return df[join_name]
-            return df[operand]
+            if left:
+                suffix = "_L"
+            else:
+                suffix = "_R"
+
+            for col in df.columns:
+                if (col == operand or (
+                    (col.endswith(suffix)) and (strip_suffixes(col) == operand))):
+                    return df[col]
 
         # if a number, just return
         return operand
@@ -919,7 +932,6 @@ def parse_aggr_conds(aggr_conds, df):
         attr = aggr.get("attr", ["*"])
         attrs = process_attributes(df, attr)
         distinct = aggr.get("distinct", False)
-        
         distinct_alias = "_^d" if distinct else ""
 
         # Special handling for count(*)
