@@ -140,7 +140,7 @@ Groups rows by one or more attributes and applies aggregate functions (e.g., `su
 (\group{dept; count(*), avg(salary)} Employees)
 (\group_by{name; sum(score)} Results)
 (\gamma{category; max(price) -> top_price} Products)
-(\gamma{category; max(price), avg(distinct print)} Products)
+(\gamma{category; max(price), avg(distinct price)} Products)
 ```
 
 **Explanation**:

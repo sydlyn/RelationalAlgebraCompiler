@@ -951,5 +951,4 @@ def parse_aggr_conds(aggr_conds, df):
             alias = alias if alias else f"{op}_{'_'.join(attrs)}{distinct_alias}"
             aggr_funcs[alias] = (attr[0], op, distinct)
 
-    print(aggr_funcs)
     return aggr_funcs

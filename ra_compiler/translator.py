@@ -340,5 +340,5 @@ class RATranslator(Transformer):
         return token.value
 
     def _ambig(self, options):
-        print_debug("encountered an ambiguous parse")
+        # print_debug("encountered an ambiguous parse")
         return options[0]  # pick the first ambiguous option

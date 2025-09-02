@@ -140,7 +140,7 @@ def handle_query(query, query_count=0):
     try:
         translation = RATranslator(query_count).transform(parsed_query)
         # FOR TESTING:
-        print_debug(f"Translation: {translation}")
+        # print_debug(f"Translation: {translation}")
     except Exception as e:
         print_error(f"An error occurred during translation: {e}", "TranslationError")
         return None
