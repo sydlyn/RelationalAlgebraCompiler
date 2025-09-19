@@ -4,12 +4,13 @@
 
 RAC is a tool to parse and execute relational algebra queries by translating them into SQL and running against a MySQL database.
 
+Here is an introductory video that explains how to use the compiler:
+https://www.youtube.com/watch?v=1mZzHnxuerk
 
 ### Requirements
 
 - Python 3.8 or higher
 - MySQL database accessible with proper credentials
-
 
 
 ## Setup Instructions
